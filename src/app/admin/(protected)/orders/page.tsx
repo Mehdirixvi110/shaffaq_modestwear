@@ -1,0 +1,14 @@
+import Link from "next/link";
+import { formatDate, formatPkr } from "@/lib/format";
+import { getAdminOrders } from "@/server/admin-data";
+
+type Query = { q?: string; orderStatus?: string; fulfillmentStatus?: string; source?: string };
+
+export default async function AdminOrdersPage({ searchParams }: { searchParams: Promise<Query> }) {
+  const query = await searchParams; const q = query.q?.slice(0, 100) ?? ""; const orders = getAdminOrders({ ...query, q });
+  const exportQuery = new URLSearchParams(Object.entries({ ...query, q }).filter((entry): entry is [string, string] => Boolean(entry[1]))).toString();
+  return <><header className="admin-heading"><div><p className="eyebrow">Operations</p><h1>Orders</h1><p>{orders.length ? `${orders.length} records in this view` : "No matching orders"}</p></div><Link className="button button--outline" href={`/api/admin/exports/orders${exportQuery ? `?${exportQuery}` : ""}`}>Export CSV</Link></header>
+    <form className="admin-filter" method="get"><label><span>Reference or customer</span><input name="q" defaultValue={q} /></label><label><span>Order status</span><select name="orderStatus" defaultValue={query.orderStatus ?? ""}><option value="">All</option>{["INQUIRY", "PENDING_CONFIRMATION", "CONFIRMED", "CANCELLED"].map((value) => <option key={value}>{value}</option>)}</select></label><label><span>Fulfilment</span><select name="fulfillmentStatus" defaultValue={query.fulfillmentStatus ?? ""}><option value="">All</option>{["UNFULFILLED", "PROCESSING", "SHIPPED", "DELIVERED"].map((value) => <option key={value}>{value}</option>)}</select></label><label><span>Source</span><select name="source" defaultValue={query.source ?? ""}><option value="">All</option><option value="STOREFRONT_COD">Storefront COD</option><option value="WHATSAPP_INQUIRY">WhatsApp inquiry</option></select></label><button className="button button--dark">Filter</button><Link className="text-link" href="/admin/orders">Clear</Link></form>
+    {orders.length ? <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Reference</th><th>Customer</th><th>Source</th><th>Order</th><th>Fulfilment</th><th>Payment</th><th>Total</th><th>Created</th></tr></thead><tbody>{orders.map((order) => <tr key={String(order.id)}><td><Link className="text-link" href={`/admin/orders/${order.id}`}>{String(order.reference)}</Link></td><td>{String(order.customerName)}<br /><small>{String(order.phone)}</small></td><td>{String(order.source).replaceAll("_", " ")}</td><td><span className="status-pill">{String(order.orderStatus).replaceAll("_", " ")}</span></td><td>{String(order.fulfillmentStatus).replaceAll("_", " ")}</td><td>{String(order.paymentStatus)}</td><td>{formatPkr(Number(order.totalPkr))}</td><td>{formatDate(Number(order.createdAt))}</td></tr>)}</tbody></table></div> : <div className="admin-card">Orders and inquiries will appear here after server-side checkout creates them.</div>}
+  </>;
+}

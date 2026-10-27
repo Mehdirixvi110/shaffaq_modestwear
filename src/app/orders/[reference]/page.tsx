@@ -1,0 +1,24 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { cookies } from "next/headers";
+import { OrderCustomerActions } from "@/components/order-customer-actions";
+import { formatDate, formatPkr } from "@/lib/format";
+import { getOrderForCustomer } from "@/server/checkout";
+import { ORDER_ACCESS_COOKIE } from "@/server/protection";
+
+export const metadata: Metadata = { title: "Order", robots: { index: false, follow: false } };
+export const dynamic = "force-dynamic";
+
+type OrderItem = { id: number; productId: number | null; productTitle: string; productSlug: string; variantTitle: string; sku: string; optionsJson: string; unitPricePkr: number; quantity: number; lineTotalPkr: number; reviewId: string | null; reviewStatus: string | null };
+type RequestEntry = { id: string; kind: string; status: string; reason: string; resolutionNote: string | null; createdAt: number };
+
+export default async function OrderPage({ params }: { params: Promise<{ reference: string }> }) {
+  const { reference } = await params; const store = await cookies(); const found = getOrderForCustomer(reference, store.get(ORDER_ACCESS_COOKIE)?.value);
+  if (!found) return <div className="inner-page shell"><div className="empty-state"><p className="eyebrow">Private order</p><h1>Order access unavailable</h1><p>This page requires the secure path-scoped browser cookie issued at checkout.</p><Link className="button button--dark" href="/">Return home</Link></div></div>;
+  const order = found as Record<string, unknown>; const items = order.items as OrderItem[]; const requests = order.requests as RequestEntry[]; const history = order.history as Array<{ event: string; note: string | null; createdAt: number }>;
+  return <div className="inner-page shell order-confirmation"><header><p className="eyebrow">Reference {String(order.reference)}</p><h1>{order.orderStatus === "CANCELLED" ? "This order was cancelled." : order.fulfillmentStatus === "DELIVERED" ? "Your order was delivered." : order.orderStatus === "CONFIRMED" ? "Your order is confirmed." : order.source === "WHATSAPP_INQUIRY" ? "Inquiry recorded" : "Thank you. Your order is pending confirmation."}</h1><p>Created {formatDate(Number(order.createdAt))}</p></header>{order.orderStatus === "CANCELLED" ? <div className="notice-box">This order was cancelled. {order.cancellationReason ? `Reason: ${String(order.cancellationReason)}` : ""}</div> : order.orderStatus === "INQUIRY" ? <div className="notice-box">WhatsApp does not confirm this inquiry or payment. Stock was not reserved. SHAFFAQ must confirm availability and next steps.</div> : order.orderStatus === "PENDING_CONFIRMATION" ? <div className="notice-box">Cash on delivery remains unpaid. SHAFFAQ must confirm the order before fulfilment.</div> : <div className="notice-box">This order is confirmed. Courier details appear only after an administrator records dispatch; no courier API is connected.</div>}
+    <div className="order-detail-grid"><section><h2>Items</h2>{items.map((item) => <article className="order-item" key={item.id}><div><h3><Link href={`/products/${item.productSlug}`}>{item.productTitle}</Link></h3><p>{item.variantTitle} · {item.sku}</p><p>{(JSON.parse(item.optionsJson) as { summary: string }).summary} × {item.quantity}</p></div><strong>{formatPkr(item.lineTotalPkr)}</strong></article>)}</section><aside><h2>Summary</h2><dl><div><dt>Status</dt><dd>{String(order.orderStatus).replaceAll("_", " ")}</dd></div><div><dt>Fulfilment</dt><dd>{String(order.fulfillmentStatus).replaceAll("_", " ")}</dd></div><div><dt>Payment</dt><dd>{String(order.paymentStatus)}</dd></div><div><dt>Subtotal</dt><dd>{formatPkr(Number(order.subtotalPkr))}</dd></div>{Number(order.discountPkr) > 0 ? <div><dt>Coupon {String(order.couponCode)}</dt><dd>−{formatPkr(Number(order.discountPkr))}</dd></div> : null}{Number(order.taxPkr) > 0 ? <div><dt>Tax</dt><dd>{formatPkr(Number(order.taxPkr))}</dd></div> : null}<div><dt>Shipping</dt><dd>{formatPkr(Number(order.shippingPkr))}</dd></div><div className="total"><dt>Total</dt><dd>{formatPkr(Number(order.totalPkr))}</dd></div></dl>{order.courierName ? <p><strong>Courier:</strong> {String(order.courierName)}<br /><strong>Tracking:</strong> {String(order.trackingNumber)}</p> : null}{order.cancellationReason ? <p><strong>Cancellation reason:</strong> {String(order.cancellationReason)}</p> : null}</aside></div>
+    <section className="customer-actions"><h2>Order activity</h2><ul className="request-list">{history.map((entry, index) => <li key={`${entry.createdAt}-${index}`}><strong>{entry.event.replaceAll("_", " ")}</strong> · {formatDate(entry.createdAt)}</li>)}</ul></section>
+    <OrderCustomerActions reference={reference} delivered={order.orderStatus === "CONFIRMED" && order.fulfillmentStatus === "DELIVERED"} items={items} requests={requests} />
+  </div>;
+}
