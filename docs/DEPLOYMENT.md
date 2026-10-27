@@ -67,3 +67,18 @@ npm run smoke:browser
 ```
 
 The wrapper creates a random database/media directory under `.data/smoke`, generates signing secrets and an admin password in process memory, migrates/seeds/bootstraps that database, sets a disposable WhatsApp test number, starts the built app on loopback, runs desktop and 390px Chrome checks, then stops the app and deletes the disposable directory. It does not require a reusable `.env` admin password or an existing `whatsapp_number` setting.
+
+## Planned Vercel and Supabase profile
+
+The selected hosted target is Vercel with Supabase project `https://ktzlxfuwcsppqjmcvatd.supabase.co`. This target is **not active yet**. The current synchronous SQLite/local-media profile must not be deployed to Vercel because Vercel functions do not provide the durable single-host filesystem and writer model it requires.
+
+Before enabling the hosted profile:
+
+1. Refactor the data layer and forward migrations for Supabase PostgreSQL.
+2. Use Supabase's transaction pooler `DATABASE_URL` for transient Vercel functions and a migration-capable `MIGRATION_DATABASE_URL` for controlled schema changes.
+3. Move uploaded media to the `shaffaq-media` Supabase Storage bucket and keep privileged storage credentials server-only.
+4. Migrate and reconcile catalogue/settings data, uploaded media, stock, orders, and audit history; validate counts and hashes before switching traffic.
+5. Configure Vercel environment variables and run migrations as a separate controlled release step, never as concurrent request startup work.
+6. Rerun all unit, database integration, authorization, checkout concurrency, and browser acceptance checks against the hosted preview.
+
+Use current Supabase secret-key credentials rather than exposing privileged legacy keys to browser code. `SUPABASE_SECRET_KEY`, database URLs, session secrets, and CSRF secrets must be stored only in local ignored configuration or the Vercel environment-variable manager.
