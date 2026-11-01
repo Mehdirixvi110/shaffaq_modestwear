@@ -7,8 +7,8 @@ import "./globals.css";
 
 const origin = process.env.NEXT_PUBLIC_APP_ORIGIN ?? process.env.APP_ORIGIN ?? "http://localhost:3000";
 
-export function generateMetadata(): Metadata {
-  const settings = getSettings();
+export async function generateMetadata(): Promise<Metadata> {
+  const settings = await getSettings();
   return {
     metadataBase: new URL(origin),
     title: { default: settings.seoTitle, template: `%s | ${settings.storeName}` },
@@ -20,10 +20,10 @@ export function generateMetadata(): Metadata {
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#f8f2ea" };
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  const settings = getSettings();
-  const navigation = getNavigation();
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const [settings, navigation] = await Promise.all([getSettings(), getNavigation()]);
   return (
     <html lang="en-PK">
       <body>

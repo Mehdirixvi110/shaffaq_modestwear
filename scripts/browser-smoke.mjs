@@ -4,10 +4,15 @@ import { resolve } from "node:path";
 const baseURL = process.env.SMOKE_BASE_URL ?? "http://localhost:3100";
 const adminEmail = process.env.SMOKE_ADMIN_EMAIL;
 const adminPassword = process.env.SMOKE_ADMIN_PASSWORD;
+const whatsappNumber = process.env.SMOKE_WHATSAPP_NUMBER ?? "923001234567";
 if (!adminEmail || !adminPassword) throw new Error("SMOKE_ADMIN_EMAIL and SMOKE_ADMIN_PASSWORD are required.");
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+function progress(stage) {
+  console.log(`[browser-smoke] ${stage}`);
 }
 
 async function addFirstProduct(page) {
@@ -28,7 +33,9 @@ async function fillCheckout(page, suffix) {
 
 const browser = await chromium.launch({ executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
 try {
+  progress("storefront, newsletter, wishlist, and COD checkout");
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  context.setDefaultNavigationTimeout(90_000);
   const page = await context.newPage();
   await page.goto(baseURL);
   assert((await page.title()).includes("SHAFFAQ"), "Homepage metadata is missing SHAFFAQ.");
@@ -59,18 +66,22 @@ try {
   await page.getByText("pending confirmation", { exact: false }).first().waitFor();
   await context.close();
 
+  progress("WhatsApp inquiry checkout");
   const inquiryContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  inquiryContext.setDefaultNavigationTimeout(90_000);
   const inquiryPage = await inquiryContext.newPage();
   await addFirstProduct(inquiryPage);
   await fillCheckout(inquiryPage, "whatsapp");
   await inquiryPage.getByRole("button", { name: "Create WhatsApp inquiry" }).click();
   await inquiryPage.getByText("Inquiry recorded").waitFor();
   const whatsappHref = await inquiryPage.getByRole("link", { name: "Open WhatsApp" }).getAttribute("href");
-  assert(Boolean(whatsappHref?.startsWith("https://wa.me/923001234567?text=")), "WhatsApp URL did not use the configured business number.");
+  assert(Boolean(whatsappHref?.startsWith(`https://wa.me/${whatsappNumber}?text=`)), "WhatsApp URL did not use the configured business number.");
   assert(decodeURIComponent(whatsappHref ?? "").includes("does not confirm your order or payment"), "WhatsApp disclaimer is missing.");
   await inquiryContext.close();
 
+  progress("protected administration and media");
   const adminContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  adminContext.setDefaultNavigationTimeout(90_000);
   const adminPage = await adminContext.newPage();
   await adminPage.goto(`${baseURL}/admin`);
   await adminPage.waitForURL(/\/admin\/login/);
@@ -92,6 +103,13 @@ try {
   await firstInventory.getByLabel("Reason (required)").fill("Disposable browser smoke adjustment");
   await firstInventory.getByRole("button", { name: "Adjust" }).click();
   await adminPage.getByText("Disposable browser smoke adjustment").waitFor();
+  if (process.env.SMOKE_HOSTED === "1") {
+    const reversedInventory = adminPage.locator(".inventory-card").first();
+    await reversedInventory.getByLabel("Adjustment (+ or −)").fill("-1");
+    await reversedInventory.getByLabel("Reason (required)").fill("Disposable browser smoke reversal");
+    await reversedInventory.getByRole("button", { name: "Adjust" }).click();
+    await adminPage.getByText("Disposable browser smoke reversal").waitFor();
+  }
   await adminPage.goto(`${baseURL}/admin/coupons`);
   await adminPage.getByRole("heading", { name: "Coupons" }).waitFor();
   await adminPage.locator("details.create-panel > summary").click();
@@ -104,13 +122,52 @@ try {
   await adminPage.getByLabel("JPEG, PNG, or WebP (max 10 MiB / 40 MP)").setInputFiles(resolve(process.cwd(), "Logo.jpg"));
   await adminPage.getByRole("button", { name: "Upload image" }).click();
   await adminPage.getByText("Image fully decoded, metadata-stripped, re-encoded, and stored under an immutable random name.").waitFor();
+  const uploadedImage = adminPage.locator(".media-preview img").first();
+  await uploadedImage.waitFor();
+  await uploadedImage.evaluate((image) => image instanceof HTMLImageElement ? image.decode() : Promise.reject(new Error("Uploaded media element is not an image.")));
+  assert(await uploadedImage.evaluate((image) => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0), "Uploaded media was not publicly retrievable in the browser.");
+  if (process.env.SMOKE_HOSTED === "1") {
+    await adminPage.goto(`${baseURL}/admin/homepage`);
+    const heroHeading = adminPage.getByLabel("Hero heading");
+    const originalHeroHeading = await heroHeading.inputValue();
+    await heroHeading.fill(`${originalHeroHeading} verification`);
+    const [homepageSaveResponse] = await Promise.all([
+      adminPage.waitForResponse((response) => response.url().endsWith("/api/admin/homepage") && response.request().method() === "PATCH"),
+      adminPage.getByRole("button", { name: "Save homepage" }).click(),
+    ]);
+    assert(homepageSaveResponse.ok(), `Homepage edit failed: ${await homepageSaveResponse.text()}`);
+    await adminPage.getByText("Homepage saved.", { exact: false }).waitFor();
+    await heroHeading.fill(originalHeroHeading);
+    await Promise.all([
+      adminPage.waitForResponse((response) => response.url().endsWith("/api/admin/homepage") && response.request().method() === "PATCH"),
+      adminPage.getByRole("button", { name: "Save homepage" }).click(),
+    ]);
+
+    await adminPage.goto(`${baseURL}/admin/settings`);
+    const descriptor = adminPage.getByLabel("Descriptor");
+    const originalDescriptor = await descriptor.inputValue();
+    await descriptor.fill(`${originalDescriptor} verification`);
+    await Promise.all([
+      adminPage.waitForResponse((response) => response.url().endsWith("/api/admin/settings") && response.request().method() === "PATCH"),
+      adminPage.getByRole("button", { name: "Save settings" }).click(),
+    ]);
+    await adminPage.waitForLoadState("domcontentloaded");
+    await adminPage.getByLabel("Descriptor").fill(originalDescriptor);
+    await Promise.all([
+      adminPage.waitForResponse((response) => response.url().endsWith("/api/admin/settings") && response.request().method() === "PATCH"),
+      adminPage.getByRole("button", { name: "Save settings" }).click(),
+    ]);
+    await adminPage.waitForLoadState("domcontentloaded");
+  }
   for (const [path, heading] of [["orders", "Orders"], ["returns", "Returns & exchanges"], ["customers", "Customers"], ["reviews", "Reviews"], ["newsletter", "Newsletter"], ["settings", "Settings"]]) {
     await adminPage.goto(`${baseURL}/admin/${path}`);
     await adminPage.getByRole("heading", { name: heading }).waitFor();
   }
   await adminContext.close();
 
+  progress("coupon checkout");
   const couponContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  couponContext.setDefaultNavigationTimeout(90_000);
   const couponPage = await couponContext.newPage();
   await addFirstProduct(couponPage);
   await couponPage.goto(`${baseURL}/cart`);
@@ -122,7 +179,9 @@ try {
   await couponPage.waitForURL(/\/orders\/SHQ-/);
   await couponContext.close();
 
+  progress("390px responsive navigation and grid");
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  mobileContext.setDefaultNavigationTimeout(90_000);
   const mobilePage = await mobileContext.newPage();
   await mobilePage.goto(baseURL);
   const columns = await mobilePage.locator(".product-grid").first().evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length);

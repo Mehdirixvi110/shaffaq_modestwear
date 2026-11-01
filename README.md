@@ -1,104 +1,140 @@
 # SHAFFAQ Commerce
 
-A local-first SHAFFAQ storefront and administration application built with Next.js, TypeScript, Drizzle ORM, SQLite, Zod, Argon2, and Sharp.
+SHAFFAQ is a Next.js 16 App Router storefront and administration application for Pakistan PKR cash-on-delivery commerce. It supports two explicit data and media profiles:
+
+| Profile | Database | New admin uploads | Intended use |
+|---|---|---|---|
+| Local | SQLite | Local persistent filesystem | One Node process on one durable host |
+| Hosted | Supabase PostgreSQL | Public Supabase Storage bucket | Vercel Node.js functions |
+
+The hosted profile uses asynchronous repositories, PostgreSQL transactions and conditional updates, the Supabase transaction pooler at runtime, and the session pooler only for controlled migration, seed, reconciliation, and administrator bootstrap commands.
 
 ## Implemented application
 
-- Responsive storefront, catalogue search/filter/sort, product variants, anonymous database-backed cart, and Pakistan COD checkout.
-- Protected administration with database sessions, same-origin and signed-CSRF mutation checks, validation, optimistic version checks, and audit logs.
-- Product, category, collection, homepage, policy, settings, shipping-region, media, order, inventory, coupon, customer-summary, return/exchange, review, and newsletter operations.
-- Variant low-stock thresholds, reasoned conditional adjustments, immutable stock movements, dashboard alerts, and CSV export.
-- Percentage, fixed-PKR, and free-shipping coupons with dates, minimums, scopes, global/contact limits, server recalculation, and atomic order redemption.
-- Order search/filter/export, immutable-snapshot invoice and packing slip, courier/tracking recording, cancellation reasons, legal return/exchange transitions, and activity history.
-- Anonymous wishlist tied to an opaque HttpOnly cookie. Full customer accounts remain deferred; guest checkout is preserved.
-- Explicit newsletter consent timestamp/source and capability-link unsubscribe. No newsletter or transactional email sending is configured.
-- Reviews accepted only through a delivered-order capability, held for moderation, and rendered publicly only after approval. Seed data contains no reviews, customers, orders, or sales.
-- Product CSV export and preview-first, explicitly confirmed atomic import with row errors and stale-preview protection. Spreadsheet exports prefix formula-like cells.
-- JPEG/PNG/WebP uploads are fully decoded, bounded to 10 MiB, 12,000 pixels per side, and 40 megapixels, then metadata-stripped and re-encoded under random immutable names. Replacement creates a new file, repoints live references transactionally, and retains the old file.
+- Responsive storefront, catalogue search/filter/sort, variants, anonymous database-backed cart, wishlist, and Pakistan COD checkout.
+- Checkout idempotency, coupon limits, conditional stock allocation/release, immutable stock movements, and legal order/return transitions.
+- Protected administration with Argon2 passwords, database sessions, exact-origin and signed-CSRF mutation checks, optimistic versions, and audit logs.
+- Product, taxonomy, homepage, policy, settings, shipping, media, order, inventory, coupon, return, review, newsletter, customer-summary, CSV export, and preview-first product import operations.
+- Reviews require a delivered-order capability and moderation. Newsletter records capture explicit consent and support capability-link unsubscribe. No email delivery is configured.
+- JPEG/PNG/WebP uploads are decoded with Sharp, bounded to 10 MiB, 12,000 pixels per side, and 40 megapixels, then rotated, metadata-stripped, re-encoded, and stored under immutable random keys.
+- Media replacement creates a new object and transactionally repoints live references. The previous object remains available for audit/history.
 
-PKR and Pakistan COD are the only live market and payment path. International shipping rows are disabled architecture only. Online payments, email delivery, courier APIs, external object storage, analytics execution, currency conversion, and WhatsApp Business API automation are not enabled.
+PKR and Pakistan COD are the only enabled market and payment path. The application never accepts a client-supplied payment status. Online payments, email delivery, courier APIs, currency conversion, analytics execution, and WhatsApp Business API automation remain disabled.
 
 ## Project structure
 
 ```text
-src/app/                 Storefront, checkout, order capability, admin, and API routes
-src/components/          Responsive storefront/admin client components
-src/db/                  Drizzle schema and persistent SQLite connection
-src/lib/                 Pricing, coupons, CSV, inventory, security, and validation rules
-src/server/              Catalogue, cart, checkout, auth, import, inventory, and audit services
-scripts/                 Migration, seed, bootstrap, backup, local-start, and smoke commands
-drizzle/                 Generated forward-only SQLite migrations
-public/brand + media/    Copies of selected supplied assets; source originals stay untouched
-tests/                   Focused pricing, coupons, CSV, idempotency, stock, and authorization tests
-.data/                   Local database, uploaded media, backups, and disposable smoke data (ignored)
+src/app/                    Storefront, admin pages, and Node.js API routes
+src/config/runtime.ts       Fail-closed production configuration validation
+src/db/provider.ts          Async SQLite/PostgreSQL provider boundary
+src/db/schema.ts            SQLite Drizzle schema
+src/db/pg-schema.ts         Equivalent PostgreSQL Drizzle schema
+src/server/                 Commerce, auth, inventory, data, and media services
+drizzle/                    Forward-only SQLite migrations
+drizzle-pg/                 Forward-only PostgreSQL migrations
+scripts/                    Migration, seed, bootstrap, reconcile, and smoke tools
+public/brand + public/media Git-backed copies of verified supplied seed assets
+tests/                      Focused commerce, auth, provider, and config tests
+.data/                      Ignored local database/media/backups/smoke data
 ```
 
-## Local setup
+## Local SQLite setup
 
 1. Copy `.env.example` to `.env.local`.
-2. Generate independent secrets with `node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))"` and set `SESSION_SECRET` and `CSRF_SECRET`.
-3. Install and initialize:
+2. Generate independent secrets:
+
+   ```powershell
+   node -e "process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))"
+   ```
+
+   Set different values for `SESSION_SECRET` and `CSRF_SECRET`.
+3. Select the local profile:
+
+   ```dotenv
+   DATABASE_PROVIDER=sqlite
+   MEDIA_PROVIDER=local
+   APP_ORIGIN=http://localhost:3000
+   NEXT_PUBLIC_APP_ORIGIN=http://localhost:3000
+   ```
+
+4. Install and initialize:
 
    ```powershell
    npm install
    npm run db:migrate
    npm run db:seed
+   npm run dev
    ```
 
-   `db:migrate` applies the checked-in forward-only migrations. Run `npm run db:generate` only after intentionally changing `src/db/schema.ts`.
+The SQLite commands remain provider-specific even if `.env.local` currently selects PostgreSQL. `npm run smoke:browser` creates its own disposable SQLite database and process-only administrator credentials, exercises desktop and 390px Chrome, then removes the disposable data.
 
-4. Choose a unique admin password of at least 14 characters and keep it in a password manager. The private, Git-ignored `.env.local` file is the local administrator setup file. Set:
+## Administrator bootstrap
 
-   ```dotenv
-   ADMIN_EMAIL=admin@shaffaqmodestwear.com
-   ADMIN_INITIAL_PASSWORD=your-password-manager-generated-value
-   ```
+`.env.local` is the ignored local file where command-only administrator bootstrap values can be set:
 
-   Then create the administrator and immediately clear the password value from `.env.local`:
+```dotenv
+ADMIN_EMAIL=admin@shaffaqmodestwear.com
+ADMIN_INITIAL_PASSWORD=a-unique-password-manager-generated-value
+```
 
-   ```powershell
-   npm run bootstrap:admin
-   ```
+Use a unique password of at least 14 characters. Run one command, then immediately clear `ADMIN_INITIAL_PASSWORD`:
 
-   `bootstrap:admin`, migration, seed, backup, and `start:local` load `.env.local` when it exists. You can instead provide process environment variables in deployment environments. Never commit `.env.local` or retain `ADMIN_INITIAL_PASSWORD` after bootstrap.
+```powershell
+npm run bootstrap:admin       # SQLite
+npm run bootstrap:admin:pg    # Supabase PostgreSQL through MIGRATION_DATABASE_URL
+```
 
-5. Run `npm run dev` and open `http://localhost:3000`. Admin login is `/admin/login`.
+The command refuses to overwrite an existing administrator and never prints the password. No permanent PostgreSQL administrator is seeded automatically.
 
-For the built local profile, run `npm run build` followed by `npm run start:local`.
+## Hosted Supabase and Vercel profile
 
-## Administration paths
+The hosted runtime requires:
 
-- `/admin/products`, `/admin/categories`, `/admin/collections`
-- `/admin/inventory`, `/admin/coupons`
-- `/admin/orders`, `/admin/returns`, `/admin/customers`
-- `/admin/reviews`, `/admin/newsletter`
-- `/admin/homepage`, `/admin/media`, `/admin/policies`, `/admin/settings`
+```dotenv
+DATABASE_PROVIDER=postgres
+MEDIA_PROVIDER=supabase
+DATABASE_URL=                 # Supabase transaction pooler, port 6543
+MIGRATION_DATABASE_URL=       # Supabase session pooler, port 5432; release commands only
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SECRET_KEY=
+SUPABASE_STORAGE_BUCKET=shaffaq-media
+APP_ORIGIN=https://your-exact-domain.example
+NEXT_PUBLIC_APP_ORIGIN=https://your-exact-domain.example
+SESSION_SECRET=
+CSRF_SECRET=
+```
 
-Customer order actions remain under `/orders/{reference}` and require the path-scoped order capability cookie issued by checkout. The cookie cannot access any other order.
+Production validation rejects SQLite, local media, HTTP/noncanonical origins, missing provider values, short or reused signing secrets, and a runtime database URL not using port 6543. The Supabase secret key is referenced only by server modules and must never use a `NEXT_PUBLIC_` name.
+
+Run PostgreSQL migrations separately from normal application startup:
+
+```powershell
+npm run db:pg:migrate
+npm run db:pg:seed
+npm run db:pg:reconcile
+```
+
+See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for GitHub-to-Vercel setup, environment scope, Storage requirements, backups, rollback, and operational caveats. See [`docs/SUPABASE_MIGRATION.md`](docs/SUPABASE_MIGRATION.md) for the verified migration record and remaining administrator action.
 
 ## Commands
 
-- `npm run dev` — local development server on loopback
-- `npm run build` — production-mode build
-- `npm run start:local` — serve the completed build on `127.0.0.1`
-- `npm run lint` / `npm run typecheck` / `npm test` — single-run verification
-- `npm run db:generate` / `npm run db:migrate` / `npm run db:seed` — schema generation, migration, and idempotent defaults
-- `npm run bootstrap:admin` — environment-backed first-admin creation
-- `npm run backup:sqlite` — consistent SQLite backup under `.data/backups`
-- `npm run smoke:browser` — after `npm run build`, create a fresh disposable database, generate process-local secrets/admin credentials, configure a disposable WhatsApp test number, run desktop/mobile Chrome checks, stop the server, and delete disposable data
+- `npm run dev` — run the selected profile on loopback in development mode
+- `npm run build` / `npm start` — build and start the production application
+- `npm run start:local` — start a completed build on loopback; explicitly permits SQLite/local media only for this local command
+- `npm run lint` / `npm run typecheck` / `npm test` — static and focused single-run checks
+- `npm run db:generate` — generate a forward SQLite migration after an intentional SQLite schema change
+- `npm run db:migrate` / `npm run db:seed` — migrate and idempotently seed SQLite
+- `npm run db:pg:generate` — generate a forward PostgreSQL migration after an intentional PostgreSQL schema change
+- `npm run db:pg:migrate` / `npm run db:pg:seed` — controlled PostgreSQL migration and truthful sample seed
+- `npm run db:pg:reconcile` — report all application table counts and verify critical store settings
+- `npm run bootstrap:admin` / `npm run bootstrap:admin:pg` — one-time administrator creation
+- `npm run backup:sqlite` — consistent local SQLite backup
+- `npm run test:pg` — create, migrate, seed, test, and drop an isolated Supabase schema; also upload, retrieve, and remove one uniquely prefixed Storage object
+- `npm run smoke:browser` — disposable built-app SQLite desktop/mobile smoke
+- `npm run smoke:pg` — disposable built-app PostgreSQL/Supabase desktop/mobile smoke with process-only credentials and object/schema cleanup
 
-The smoke wrapper never reads or writes reusable admin credentials. Its credentials and signing secrets exist only in child-process environments, and its database lives under a random `.data/smoke` directory until cleanup.
+## Data and backup boundaries
 
-## Data, privacy, and asset safety
+The seed contains six clearly labelled editable sample products, baseline taxonomies/homepage/policy templates, verified Git-backed supplied images, Pakistan shipping at PKR 250, free shipping from PKR 6,000, COD enabled, and the supplied contact details. It creates no customer, order, sale, coupon, review, newsletter, wishlist, or administrator records.
 
-`Logo.jpg` is the authoritative supplied logo. Seeding verifies its SHA-256 and copies it to `public/brand/logo.jpg`; it never changes the source. Selected supplied catalogue images are handled the same way. Uploaded media stays under `.data/media` and is served through the application.
-
-Guest contact/address snapshots, coupon redemptions, stock movements, consent records, reviews, anonymous wishlists, and return requests are persisted in SQLite. Customer contact data appears only on authorized admin pages and the matching path-capability order page. Public approved-review names are abbreviated.
-
-The SQLite database defaults to `.data/db/shaffaq.sqlite`. Back up both `.data/db` and `.data/media`. To restore, stop the app, preserve the current `.data` directory, restore both paths together, run `PRAGMA integrity_check` and `PRAGMA foreign_key_check`, apply migrations, and then restart. `npm run backup:sqlite` creates and checks a database backup, but off-machine retention remains an operator responsibility. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
-
-## Deployment boundaries
-
-This repository supports one local/single-host Node process with persistent SQLite. It has not been deployed and is not a production-readiness claim. Before public deployment, configure HTTPS, independent managed secrets, a durable volume, off-machine tested backups, monitoring, proxy/origin rules, resource limits, and one application writer. Review every sample product, price, stock value, image right, policy, tax setting, return rule, contact detail, and shipping region. Do not deploy this SQLite profile to an ephemeral or multi-writer platform.
-
-This workspace is not a standalone Git repository and sits below a broader ancestor repository. Do not stage or commit from the ancestor root. Initialize a standalone repository here only with the owner's approval.
+For SQLite, back up the database and `.data/media` together. For the hosted profile, database backups and Storage object protection are separate responsibilities. PostgreSQL dumps do not contain Supabase Storage objects. Supabase free-tier quotas, inactivity behavior, backup/point-in-time-recovery availability, egress, connection limits, and support terms must be reviewed before accepting business traffic. Complete a restore drill and arrange independent exports appropriate to the business before launch.

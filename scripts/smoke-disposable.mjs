@@ -17,6 +17,10 @@ const adminPassword = `Smoke-${randomBytes(18).toString("base64url")}Aa1!`;
 const env = {
   ...process.env,
   NODE_ENV: "production",
+  VERCEL: "0",
+  SHAFFAQ_ALLOW_LOCAL_PRODUCTION_PROFILE: "1",
+  DATABASE_PROVIDER: "sqlite",
+  MEDIA_PROVIDER: "local",
   APP_ORIGIN: baseURL,
   NEXT_PUBLIC_APP_ORIGIN: baseURL,
   PORT: String(port),

@@ -5,7 +5,7 @@ import { formatDate, formatPkr } from "@/lib/format";
 import { getAdminOrder } from "@/server/admin-data";
 
 export default async function AdminOrderPage({ params }: { params: Promise<{ id: string }> }) {
-  const found = getAdminOrder((await params).id); if (!found) notFound();
+  const found = await getAdminOrder((await params).id); if (!found) notFound();
   const order = found as Record<string, unknown>; const items = order.items as Array<Record<string, unknown>>; const history = order.history as Array<Record<string, unknown>>; const requests = order.requests as Array<Record<string, unknown>>;
   return <><header className="admin-heading"><div><p className="eyebrow"><Link href="/admin/orders">Orders</Link> / {String(order.reference)}</p><h1>{String(order.customerName)}</h1><p>{formatDate(Number(order.createdAt))} · version {Number(order.version)}</p></div><div className="button-row"><Link className="button button--outline" href={`/admin/orders/${order.id}/invoice`} target="_blank">Print invoice</Link><Link className="button button--outline" href={`/admin/orders/${order.id}/packing-slip`} target="_blank">Packing slip</Link></div></header>
     <div className="admin-grid"><article className="metric-card"><span>Order</span><strong className="status-pill">{String(order.orderStatus).replaceAll("_", " ")}</strong></article><article className="metric-card"><span>Fulfilment</span><strong className="status-pill">{String(order.fulfillmentStatus).replaceAll("_", " ")}</strong></article><article className="metric-card"><span>Payment</span><strong className="status-pill">{String(order.paymentStatus)}</strong></article><article className="metric-card"><span>Total</span><strong>{formatPkr(Number(order.totalPkr))}</strong></article></div>

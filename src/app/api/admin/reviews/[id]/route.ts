@@ -7,12 +7,12 @@ const schema = z.object({ status: z.enum(["APPROVED", "REJECTED"]), expectedStat
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
   try {
-    const actor = authorizeAdminMutation(request); const id = z.uuid().parse((await context.params).id); const input = schema.parse(await request.json());
-    withAdminAudit(actor, `reviews.${input.status.toLowerCase()}`, "review", id, {}, (connection) => {
-      const update = connection.prepare("UPDATE reviews SET status = ?, moderated_by = ?, moderated_at = unixepoch() * 1000 WHERE id = ? AND status = ?")
+    const actor = await authorizeAdminMutation(request); const id = z.uuid().parse((await context.params).id); const input = schema.parse(await request.json());
+    await withAdminAudit(actor, `reviews.${input.status.toLowerCase()}`, "review", id, {}, async (connection) => {
+      const update = await connection.prepare("UPDATE reviews SET status = ?, moderated_by = ?, moderated_at = unixepoch() * 1000 WHERE id = ? AND status = ?")
         .run(input.status, actor.id, id, input.expectedStatus);
       if (update.changes !== 1) {
-        if (!connection.prepare("SELECT 1 FROM reviews WHERE id = ?").get(id)) throw new ApiError(404, "REVIEW_NOT_FOUND", "Review not found.");
+        if (!await connection.prepare("SELECT 1 FROM reviews WHERE id = ?").get(id)) throw new ApiError(404, "REVIEW_NOT_FOUND", "Review not found.");
         throw new ApiError(409, "VERSION_CONFLICT", "This review changed in another session. Reload and try again.");
       }
     });

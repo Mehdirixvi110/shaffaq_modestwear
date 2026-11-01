@@ -1,28 +1,15 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { mkdirSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import * as schema from "./schema";
+import { validateRuntimeConfiguration } from "@/config/runtime";
+import { createDatabaseConnection, type DatabaseConnection } from "./provider";
 
-const databasePath = resolve(process.cwd(), process.env.SQLITE_PATH ?? ".data/db/shaffaq.sqlite");
-mkdirSync(dirname(databasePath), { recursive: true });
+validateRuntimeConfiguration();
 
 type DatabaseGlobal = typeof globalThis & {
-  __shaffaqSqlite?: Database.Database;
+  __shaffaqDatabase?: DatabaseConnection & { close(): Promise<void> };
 };
 
 const globalDatabase = globalThis as DatabaseGlobal;
-export const sqlite = globalDatabase.__shaffaqSqlite ?? new Database(databasePath);
+export const database = globalDatabase.__shaffaqDatabase ?? createDatabaseConnection();
 
-sqlite.pragma("foreign_keys = ON");
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("busy_timeout = 5000");
-sqlite.pragma("synchronous = NORMAL");
-sqlite.defaultSafeIntegers(false);
+if (process.env.NODE_ENV !== "production") globalDatabase.__shaffaqDatabase = database;
 
-if (process.env.NODE_ENV !== "production") {
-  globalDatabase.__shaffaqSqlite = sqlite;
-}
-
-export const db = drizzle(sqlite, { schema });
-export type ShaffaqDatabase = typeof db;
+export type { DatabaseConnection, PreparedQuery, RunResult } from "./provider";

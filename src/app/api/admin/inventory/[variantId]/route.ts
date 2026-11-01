@@ -11,15 +11,15 @@ const schema = z.discriminatedUnion("action", [
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ variantId: string }> }) {
   try {
-    const actor = authorizeAdminMutation(request);
+    const actor = await authorizeAdminMutation(request);
     const variantId = z.coerce.number().int().positive().parse((await context.params).variantId);
     const input = schema.parse(await request.json());
-    const result = withAdminAudit(actor, `inventory.${input.action.toLowerCase()}`, "variant", String(variantId), input.action === "ADJUST" ? { delta: input.delta, reason: input.reason } : { lowStockThreshold: input.lowStockThreshold }, (connection) => {
+    const result = await withAdminAudit(actor, `inventory.${input.action.toLowerCase()}`, "variant", String(variantId), input.action === "ADJUST" ? { delta: input.delta, reason: input.reason } : { lowStockThreshold: input.lowStockThreshold }, async (connection) => {
       if (input.action === "ADJUST") return adjustStock(connection, { variantId, delta: input.delta, expectedVersion: input.expectedVersion, reason: input.reason, source: "MANUAL", sourceKey: `MANUAL:${input.idempotencyKey}`, actorUserId: actor.id });
-      const update = connection.prepare("UPDATE variants SET low_stock_threshold = ?, version = version + 1, updated_at = unixepoch() * 1000 WHERE id = ? AND version = ?")
+      const update = await connection.prepare("UPDATE variants SET low_stock_threshold = ?, version = version + 1, updated_at = unixepoch() * 1000 WHERE id = ? AND version = ?")
         .run(input.lowStockThreshold, variantId, input.expectedVersion);
       if (update.changes !== 1) {
-        const exists = connection.prepare("SELECT 1 FROM variants WHERE id = ?").get(variantId);
+        const exists = await connection.prepare("SELECT 1 FROM variants WHERE id = ?").get(variantId);
         if (!exists) throw new ApiError(404, "VARIANT_NOT_FOUND", "Variant not found.");
         throw new ApiError(409, "VERSION_CONFLICT", "Inventory changed in another session. Reload and try again.");
       }

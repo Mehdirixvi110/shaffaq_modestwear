@@ -10,6 +10,6 @@ export async function PATCH(request: NextRequest) {
   try {
     assertMutationRequest(request);
     const input = schema.parse(await request.json());
-    return NextResponse.json(setCartCoupon(request.cookies.get(CART_COOKIE)?.value, input.code));
+    return NextResponse.json(await setCartCoupon(request.cookies.get(CART_COOKIE)?.value, input.code));
   } catch (error) { return apiErrorResponse(error); }
 }

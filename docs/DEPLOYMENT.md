@@ -1,84 +1,130 @@
-# Deployment and backup boundaries
+# Vercel and Supabase deployment
 
-## Supported profile
+## Supported profiles
 
-The verified profile is one Node.js process on one host. It stores SQLite at `.data/db/shaffaq.sqlite` and re-encoded uploaded media at `.data/media`. Both locations must persist and be backed up together.
+SHAFFAQ supports two explicit profiles:
 
-This work has not deployed SHAFFAQ and does not certify production readiness. Do not use an ephemeral/serverless filesystem or multiple application writers with this SQLite profile.
+- `DATABASE_PROVIDER=sqlite` and `MEDIA_PROVIDER=local` for one Node process with durable local storage.
+- `DATABASE_PROVIDER=postgres` and `MEDIA_PROVIDER=supabase` for Vercel Node.js functions backed by Supabase PostgreSQL and the public `shaffaq-media` Storage bucket.
 
-PKR and Pakistan cash on delivery are the only live market/payment configuration. International shipping-region records must remain disabled until real pricing, payment, fulfilment, tax, and policy work is completed. No fake currency conversion exists.
+Never deploy the SQLite/local-media profile to Vercel. The production validator rejects it. The local production-profile override exists only for the disposable loopback smoke command and is rejected when `VERCEL=1`.
 
-## Before any public launch
+## Supabase prerequisites
 
-- Put the application behind reviewed HTTPS termination and set `APP_ORIGIN` to the exact canonical origin.
-- Generate independent 32-byte-or-longer `SESSION_SECRET` and `CSRF_SECRET` values in a secret manager.
-- Provision one durable volume for the database and uploaded media. Keep one application writer and verify SQLite locking.
-- Schedule forward-only migrations during maintenance. Back up before every migration.
-- Configure encrypted off-machine backups and complete a restore drill for both database and media.
-- Add monitoring, log retention, resource limits, and tested proxy/origin handling.
-- Review every sample product, image right, price, stock level/threshold, coupon, shipping rate, social link, SEO default, contact detail, and policy template.
-- Obtain local legal/tax review before enabling tax or accepting real orders, returns, exchanges, reviews, or newsletter consent.
-- Define retention and access rules for order PII, consent records, anonymous wishlist tokens, reviews, stock history, and audit logs.
-- Configure and test a real WhatsApp number only if the user-initiated `wa.me` inquiry flow is wanted.
+The selected project is `https://ktzlxfuwcsppqjmcvatd.supabase.co`.
 
-Online payments, transactional/newsletter email delivery, courier APIs, external object storage, analytics execution, international pricing/conversion, and WhatsApp Business API delivery remain disabled. Stored settings and courier/tracking text fields do not enable those providers.
+### PostgreSQL connections
 
-## Migration procedure
+Copy both connection strings from the Supabase dashboard and keep them URL-encoded:
 
-1. Stop application writes.
-2. Run `npm run backup:sqlite` and copy the backup plus `.data/media` off-host.
-3. Run `npm run db:migrate` once against the intended `SQLITE_PATH`.
-4. Run `npm run db:seed`; it is idempotent and adds only defaults/baseline operational records. It does not fabricate customers, orders, sales, coupons, or reviews.
-5. Require both checks to pass:
+- `DATABASE_URL`: transaction pooler URL on port **6543**. Vercel request handlers use this URL with TLS, `prepare:false`, and one connection per function instance.
+- `MIGRATION_DATABASE_URL`: session pooler URL on port **5432**. Only controlled migration, seed, reconciliation, and administrator-bootstrap commands use this URL.
 
-   ```powershell
-   sqlite3 .data/db/shaffaq.sqlite "PRAGMA integrity_check; PRAGMA foreign_key_check;"
-   ```
+Supabase pooler usernames commonly include the project reference. Use the exact role and URL shown by the dashboard. Do not substitute the direct database host, expose either URL to browser code, or run schema migration during request startup.
 
-6. Build and smoke test on loopback before routing traffic.
+### Storage
 
-Never edit a migration that has already been applied. Add a new forward-only migration for later schema changes.
+The public bucket `shaffaq-media` must exist before deployment. Keep its bucket-level restrictions at:
 
-## Backup
+- accepted MIME types: JPEG, PNG, and WebP;
+- maximum object size: 10 MiB;
+- public read access for stable catalogue image URLs.
 
-Stop writes when practical, then run:
+The application validates and re-encodes images with Sharp before upload. It writes immutable random object keys. Replacement repoints database references but retains the prior object for history. The Supabase secret key stays server-only and must not have a `NEXT_PUBLIC_` prefix.
+
+## Controlled database release
+
+Run release commands from a trusted workstation or protected CI job that has `MIGRATION_DATABASE_URL`. Do not add these commands to Vercel build or runtime startup.
 
 ```powershell
-npm run backup:sqlite
+npm ci
+npm run lint
+npm run typecheck
+npm test
+npm run test:pg
+npm run build
+npm run smoke:pg
+npm run db:pg:migrate
+npm run db:pg:seed
+npm run db:pg:reconcile
 ```
 
-The command uses SQLite's backup API and verifies the resulting database with `PRAGMA integrity_check`. Copy the resulting `.data/backups/*.sqlite` file and `.data/media` to encrypted off-machine storage. A database-only backup is incomplete when uploaded media is in use. Retain old media files referenced by replacement/audit history.
+`db:pg:migrate` takes an advisory lock, verifies the SHA-256 of previously applied migration files, and applies each new forward migration in a transaction. `db:pg:seed` is idempotent. It creates the six labelled sample products and baseline content, and reconciles the supplied contact/shipping/COD values. It does not create business orders, customers, sales, coupons, reviews, or administrators.
 
-## Restore rehearsal
+`test:pg` and `smoke:pg` create uniquely named temporary schemas, run against the real Supabase project, and drop only those schemas in `finally`. Their Storage checks remove only objects whose metadata exists in the isolated test schema.
 
-1. Stop the application.
-2. Preserve the current `.data` directory rather than overwriting it.
-3. Restore the chosen SQLite file as `.data/db/shaffaq.sqlite` and restore its matching `.data/media` tree.
-4. Run `PRAGMA integrity_check` and require `ok`; run `PRAGMA foreign_key_check` and require no rows.
-5. Run `npm run db:migrate` against the restored copy.
-6. Start on loopback and verify homepage/media, product and collection pages, anonymous wishlist, cart/coupon totals, COD checkout, the path-capability order page, admin login, inventory history, exports, invoice/packing slip, returns, review moderation, newsletter consent state, and settings.
+## GitHub to Vercel
 
-## Disposable browser smoke
+1. Confirm the intended changes in the local repository and push them to `main` at `https://github.com/Mehdirixvi110/shaffaq_modestwear.git`.
+2. In Vercel, choose **Add New → Project**, import that GitHub repository, and keep the framework preset as **Next.js**.
+3. Use the repository root as the Vercel root directory. Keep the install command as `npm install` or `npm ci` and the build command as `npm run build`.
+4. Do not configure a migration command as part of Vercel build. Complete the controlled database release first.
+5. Add the environment variables below. Mark credential values as sensitive. Apply production values to **Production**. Use separate database schemas/projects and separate secrets for Preview when preview writes are permitted.
+6. Deploy a preview only after its data isolation is defined. Verify `/api/health/live`, `/api/health/ready`, storefront/cart/checkout, protected admin, media upload/public retrieval, and the canonical metadata origin.
+7. Promote to production only after business content, legal policy templates, image rights, stock, prices, tax treatment, return rules, and contact details have owner approval.
 
-After a successful production build, run:
+## Vercel environment variables
+
+| Name | Production value/purpose |
+|---|---|
+| `APP_ORIGIN` | Exact canonical HTTPS origin, with no trailing slash or path |
+| `NEXT_PUBLIC_APP_ORIGIN` | Same exact value as `APP_ORIGIN` |
+| `DATABASE_PROVIDER` | `postgres` |
+| `DATABASE_URL` | Supabase transaction pooler, port 6543 |
+| `MEDIA_PROVIDER` | `supabase` |
+| `SUPABASE_URL` | Project HTTPS URL |
+| `SUPABASE_SECRET_KEY` | Server-only Supabase secret key |
+| `SUPABASE_STORAGE_BUCKET` | `shaffaq-media` |
+| `SESSION_SECRET` | Independent random value containing at least 32 bytes |
+| `CSRF_SECRET` | Different independent random value containing at least 32 bytes |
+
+Do not configure `MIGRATION_DATABASE_URL` in the Vercel runtime unless a separate, tightly scoped release job needs it. Do not set `ADMIN_INITIAL_PASSWORD` in Vercel application environments. `SQLITE_PATH`, `MEDIA_ROOT`, and local-profile override variables do not belong in Vercel.
+
+The root layout pins application routes to the Node.js runtime. No PostgreSQL or Sharp route uses Edge runtime.
+
+## Initial administrator
+
+No hosted administrator is seeded. After choosing a unique password of at least 14 characters in a password manager, set `ADMIN_EMAIL` and `ADMIN_INITIAL_PASSWORD` only in the trusted command environment and run:
 
 ```powershell
-npm run smoke:browser
+npm run bootstrap:admin:pg
 ```
 
-The wrapper creates a random database/media directory under `.data/smoke`, generates signing secrets and an admin password in process memory, migrates/seeds/bootstraps that database, sets a disposable WhatsApp test number, starts the built app on loopback, runs desktop and 390px Chrome checks, then stops the app and deletes the disposable directory. It does not require a reusable `.env` admin password or an existing `whatsapp_number` setting.
+The command uses `MIGRATION_DATABASE_URL`, refuses to replace an existing account, stores only an Argon2 hash, and writes an audit event. Clear `ADMIN_INITIAL_PASSWORD` immediately after success. Never put the password in Git, Vercel build logs, shell history, tickets, or migration reports.
 
-## Planned Vercel and Supabase profile
+## Health and launch checks
 
-The selected hosted target is Vercel with Supabase project `https://ktzlxfuwcsppqjmcvatd.supabase.co`. This target is **not active yet**. The current synchronous SQLite/local-media profile must not be deployed to Vercel because Vercel functions do not provide the durable single-host filesystem and writer model it requires.
+- `/api/health/live` proves the Node function responds.
+- `/api/health/ready` verifies database connectivity and the `settings` table.
+- `npm run db:pg:reconcile` reports counts for the 32 application tables and validates the supplied email, phone/WhatsApp, shipping charge, free-shipping threshold, and COD state.
+- `npm run smoke:pg` verifies desktop and 390px storefront flows, product option selection, wishlist, newsletter consent/unsubscribe, cart/coupon, COD checkout, WhatsApp inquiry, protected admin, inventory adjustment/reversal, reversible homepage/settings edits, and Sharp-to-Supabase media upload/public retrieval/cleanup.
 
-Before enabling the hosted profile:
+Configure Vercel monitoring and alerting for readiness failures, 5xx responses, checkout conflicts, database/pool exhaustion, and Storage failures. Keep application logs free of credentials and customer address data unless an approved protected logging policy requires it.
 
-1. Refactor the data layer and forward migrations for Supabase PostgreSQL.
-2. Use Supabase's transaction pooler `DATABASE_URL` for transient Vercel functions and a migration-capable `MIGRATION_DATABASE_URL` for controlled schema changes.
-3. Move uploaded media to the `shaffaq-media` Supabase Storage bucket and keep privileged storage credentials server-only.
-4. Migrate and reconcile catalogue/settings data, uploaded media, stock, orders, and audit history; validate counts and hashes before switching traffic.
-5. Configure Vercel environment variables and run migrations as a separate controlled release step, never as concurrent request startup work.
-6. Rerun all unit, database integration, authorization, checkout concurrency, and browser acceptance checks against the hosted preview.
+## Backups and exports
 
-Use current Supabase secret-key credentials rather than exposing privileged legacy keys to browser code. `SUPABASE_SECRET_KEY`, database URLs, session secrets, and CSRF secrets must be stored only in local ignored configuration or the Vercel environment-variable manager.
+SQLite backups do not apply to the hosted profile. Supabase PostgreSQL backups do not include Storage objects.
+
+Before accepting real orders:
+
+1. Review the current Supabase plan's database backup and point-in-time-recovery availability.
+2. Schedule independent encrypted PostgreSQL exports and verify a restore into an isolated project/schema.
+3. Inventory and protect Storage objects separately. Preserve old objects referenced by replacement history.
+4. Define retention and access rules for order PII, sessions, consent, reviews, anonymous tokens, stock history, and audits.
+5. Monitor database size, Storage, egress, connection, and inactivity limits.
+
+Supabase and Vercel free tiers are useful for development and evaluation, but quotas, pausing/inactivity behavior, backup coverage, support, and availability may be unsuitable for a trading business. Select paid plans and independent backups based on the owner's recovery and continuity requirements.
+
+## Rollback
+
+Application rollback and schema rollback are different:
+
+- Redeploy a previous Git commit only when it is compatible with every migration already applied.
+- PostgreSQL migrations are forward-only. Do not edit an applied migration or automatically drop columns/tables. Correct a schema issue with a reviewed forward migration and a backup/restore plan.
+- If a release fails before traffic switches, leave the current production deployment active, repair forward, rerun checks, and redeploy.
+- If media upload fails before metadata commits, the route removes only the newly uploaded object. Replacement never deletes the prior object.
+- Do not switch a Vercel deployment back to SQLite/local media as a rollback. That profile cannot safely use Vercel's ephemeral filesystem.
+
+## Local SQLite backup and restore
+
+For the local profile, run `npm run backup:sqlite` and copy the resulting database plus `.data/media` to encrypted off-machine storage. Restore both together, run SQLite integrity and foreign-key checks, apply `npm run db:migrate`, and smoke test on loopback before resuming writes.

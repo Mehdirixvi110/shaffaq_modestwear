@@ -13,9 +13,8 @@ type HomeSection = {
   linkUrl: string | null;
 };
 
-export function HomeSections({ sections, featured }: { sections: HomeSection[]; featured: ProductSummary[] }) {
-  const categories = listCategoryTiles();
-  const approvedReviews = getApprovedReviews(undefined, 6);
+export async function HomeSections({ sections, featured }: { sections: HomeSection[]; featured: ProductSummary[] }) {
+  const [categories, approvedReviews] = await Promise.all([listCategoryTiles(), getApprovedReviews(undefined, 6)]);
   return sections.map((section) => {
     if (section.type === "CATEGORY_GRID") return (
       <section className="section shell" key={section.id} aria-labelledby={`section-${section.id}`}>

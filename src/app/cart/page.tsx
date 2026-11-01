@@ -9,5 +9,5 @@ export const dynamic = "force-dynamic";
 
 export default async function CartPage() {
   const store = await cookies();
-  return <div className="inner-page shell"><CartClient initialCart={readCart(store.get(CART_COOKIE)?.value)} /></div>;
+  return <div className="inner-page shell"><CartClient initialCart={await readCart(store.get(CART_COOKIE)?.value)} /></div>;
 }

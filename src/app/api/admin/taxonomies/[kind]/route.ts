@@ -1,6 +1,6 @@
-import type Database from "better-sqlite3";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import type { DatabaseConnection } from "@/db";
 import { slugSchema } from "@/lib/validation";
 import { authorizeAdminMutation, withAdminAudit } from "@/server/admin";
 import { apiErrorResponse, ApiError } from "@/server/http";
@@ -25,36 +25,38 @@ function names(kind: z.infer<typeof kindSchema>) {
   return kind === "categories" ? { table: "categories", entity: "category", foreignKey: "category_id" } : { table: "collections", entity: "collection", foreignKey: "collection_id" };
 }
 
-function validateReferences(connection: Database.Database, imagePath: string | null, productIds: number[]) {
-  if (imagePath && !connection.prepare("SELECT 1 FROM media_files WHERE public_path = ? AND replaced_at IS NULL").get(imagePath)) throw new ApiError(422, "MEDIA_NOT_FOUND", "Choose an available media item.");
+async function validateReferences(connection: DatabaseConnection, imagePath: string | null, productIds: number[]) {
+  if (imagePath && !await connection.prepare("SELECT 1 FROM media_files WHERE public_path = ? AND replaced_at IS NULL").get(imagePath)) throw new ApiError(422, "MEDIA_NOT_FOUND", "Choose an available media item.");
   if (productIds.length) {
-    const placeholders = productIds.map(() => "?").join(",");
-    const count = (connection.prepare(`SELECT COUNT(*) AS count FROM products WHERE id IN (${placeholders})`).get(...productIds) as { count: number }).count;
-    if (count !== new Set(productIds).size) throw new ApiError(422, "PRODUCT_NOT_FOUND", "One or more assigned products no longer exist.");
+    const uniqueIds = [...new Set(productIds)];
+    const placeholders = uniqueIds.map(() => "?").join(",");
+    const count = await connection.prepare(`SELECT COUNT(*) AS count FROM products WHERE id IN (${placeholders})`).get<{ count: number }>(...uniqueIds);
+    if (count?.count !== uniqueIds.length) throw new ApiError(422, "PRODUCT_NOT_FOUND", "One or more assigned products no longer exist.");
   }
 }
 
-function assignProducts(connection: Database.Database, foreignKey: string, id: number, productIds: number[]) {
+async function assignProducts(connection: DatabaseConnection, foreignKey: string, id: number, productIds: number[]) {
   if (productIds.length) {
-    const placeholders = productIds.map(() => "?").join(",");
-    connection.prepare(`UPDATE products SET ${foreignKey} = NULL, version = version + 1, updated_at = unixepoch() * 1000 WHERE ${foreignKey} = ? AND id NOT IN (${placeholders})`).run(id, ...productIds);
-    connection.prepare(`UPDATE products SET ${foreignKey} = ?, version = version + 1, updated_at = unixepoch() * 1000 WHERE id IN (${placeholders}) AND (${foreignKey} IS NULL OR ${foreignKey} != ?)`).run(id, ...productIds, id);
-  } else connection.prepare(`UPDATE products SET ${foreignKey} = NULL, version = version + 1, updated_at = unixepoch() * 1000 WHERE ${foreignKey} = ?`).run(id);
+    const uniqueIds = [...new Set(productIds)];
+    const placeholders = uniqueIds.map(() => "?").join(",");
+    await connection.prepare(`UPDATE products SET ${foreignKey} = NULL, version = version + 1, updated_at = unixepoch() * 1000 WHERE ${foreignKey} = ? AND id NOT IN (${placeholders})`).run(id, ...uniqueIds);
+    await connection.prepare(`UPDATE products SET ${foreignKey} = ?, version = version + 1, updated_at = unixepoch() * 1000 WHERE id IN (${placeholders}) AND (${foreignKey} IS NULL OR ${foreignKey} != ?)`).run(id, ...uniqueIds, id);
+  } else await connection.prepare(`UPDATE products SET ${foreignKey} = NULL, version = version + 1, updated_at = unixepoch() * 1000 WHERE ${foreignKey} = ?`).run(id);
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ kind: string }> }) {
   try {
-    const actor = authorizeAdminMutation(request);
+    const actor = await authorizeAdminMutation(request);
     const kind = kindSchema.parse((await context.params).kind);
     const input = fields.parse(await request.json());
     const config = names(kind);
-    const id = withAdminAudit(actor, `catalog.${config.entity}.create`, config.entity, null, { slug: input.slug, productCount: input.productIds.length }, (connection) => {
-      validateReferences(connection, input.imagePath, input.productIds);
+    const id = await withAdminAudit(actor, `catalog.${config.entity}.create`, config.entity, null, { slug: input.slug, productCount: input.productIds.length }, async (connection) => {
+      await validateReferences(connection, input.imagePath, input.productIds);
       try {
-        const result = connection.prepare(`INSERT INTO ${config.table} (slug, name, description, image_path, position, visible, archived, storefront_sort, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, unixepoch() * 1000)`)
+        const result = await connection.prepare(`INSERT INTO ${config.table} (slug, name, description, image_path, position, visible, archived, storefront_sort, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, unixepoch() * 1000)`)
           .run(input.slug, input.name, input.description, input.imagePath, input.position, input.visible ? 1 : 0, input.storefrontSort);
-        const entityId = Number(result.lastInsertRowid);
-        assignProducts(connection, config.foreignKey, entityId, input.productIds);
+        const entityId = result.lastInsertRowid;
+        await assignProducts(connection, config.foreignKey, entityId, input.productIds);
         return entityId;
       } catch (error) {
         if (error instanceof Error && error.message.includes("UNIQUE")) throw new ApiError(409, "SLUG_CONFLICT", "This slug is already in use.");
@@ -67,24 +69,24 @@ export async function POST(request: NextRequest, context: { params: Promise<{ ki
 
 export async function PATCH(request: NextRequest, context: { params: Promise<{ kind: string }> }) {
   try {
-    const actor = authorizeAdminMutation(request);
+    const actor = await authorizeAdminMutation(request);
     const kind = kindSchema.parse((await context.params).kind);
     const input = patchSchema.parse(await request.json());
     const config = names(kind);
-    const result = withAdminAudit(actor, `catalog.${config.entity}.${input.operation.toLowerCase()}`, config.entity, String(input.id), { operation: input.operation }, (connection) => {
+    const result = await withAdminAudit(actor, `catalog.${config.entity}.${input.operation.toLowerCase()}`, config.entity, String(input.id), { operation: input.operation }, async (connection) => {
       if (input.operation !== "SAVE") {
         const archived = input.operation === "ARCHIVE";
-        const update = connection.prepare(`UPDATE ${config.table} SET archived = ?, visible = ?, version = version + 1, updated_at = unixepoch() * 1000 WHERE id = ? AND version = ?`)
+        const update = await connection.prepare(`UPDATE ${config.table} SET archived = ?, visible = ?, version = version + 1, updated_at = unixepoch() * 1000 WHERE id = ? AND version = ?`)
           .run(archived ? 1 : 0, archived ? 0 : 1, input.id, input.expectedVersion);
         if (update.changes !== 1) throw new ApiError(409, "VERSION_CONFLICT", "This record changed in another session. Reload and try again.");
         return { id: input.id, version: input.expectedVersion + 1, archived };
       }
-      validateReferences(connection, input.imagePath, input.productIds);
+      await validateReferences(connection, input.imagePath, input.productIds);
       try {
-        const update = connection.prepare(`UPDATE ${config.table} SET slug = ?, name = ?, description = ?, image_path = ?, position = ?, visible = ?, storefront_sort = ?, version = version + 1, updated_at = unixepoch() * 1000 WHERE id = ? AND version = ?`)
+        const update = await connection.prepare(`UPDATE ${config.table} SET slug = ?, name = ?, description = ?, image_path = ?, position = ?, visible = ?, storefront_sort = ?, version = version + 1, updated_at = unixepoch() * 1000 WHERE id = ? AND version = ?`)
           .run(input.slug, input.name, input.description, input.imagePath, input.position, input.visible ? 1 : 0, input.storefrontSort, input.id, input.expectedVersion);
         if (update.changes !== 1) throw new ApiError(409, "VERSION_CONFLICT", "This record changed in another session. Reload and try again.");
-        assignProducts(connection, config.foreignKey, input.id, input.productIds);
+        await assignProducts(connection, config.foreignKey, input.id, input.productIds);
         return { id: input.id, version: input.expectedVersion + 1 };
       } catch (error) {
         if (error instanceof ApiError) throw error;

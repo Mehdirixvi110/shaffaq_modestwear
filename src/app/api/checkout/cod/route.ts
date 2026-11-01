@@ -8,7 +8,7 @@ export async function POST(request: NextRequest) {
   try {
     assertMutationRequest(request);
     const input = checkoutSchema.parse(await request.json());
-    const { result, accessToken } = checkout(input, "STOREFRONT_COD", request.cookies.get(CART_COOKIE)?.value, request.cookies.get(CHECKOUT_SUBJECT_COOKIE)?.value);
+    const { result, accessToken } = await checkout(input, "STOREFRONT_COD", request.cookies.get(CART_COOKIE)?.value, request.cookies.get(CHECKOUT_SUBJECT_COOKIE)?.value);
     const response = NextResponse.json(result, { status: 201 });
     response.cookies.set(ORDER_ACCESS_COOKIE, accessToken, { ...privateCookie, sameSite: "strict", path: `/orders/${result.reference}`, maxAge: 90 * 24 * 60 * 60 });
     response.cookies.set(CART_COOKIE, "", { ...privateCookie, maxAge: 0 });

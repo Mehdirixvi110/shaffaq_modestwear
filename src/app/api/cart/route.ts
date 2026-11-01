@@ -4,6 +4,6 @@ import { CART_COOKIE } from "@/server/protection";
 
 export const dynamic = "force-dynamic";
 
-export function GET(request: NextRequest) {
-  return NextResponse.json(readCart(request.cookies.get(CART_COOKIE)?.value), { headers: { "Cache-Control": "no-store" } });
+export async function GET(request: NextRequest) {
+  return NextResponse.json(await readCart(request.cookies.get(CART_COOKIE)?.value), { headers: { "Cache-Control": "no-store" } });
 }

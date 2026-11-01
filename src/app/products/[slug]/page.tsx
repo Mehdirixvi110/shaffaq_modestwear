@@ -10,12 +10,14 @@ import { getApprovedReviews, getProduct, getSettings } from "@/server/store";
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ slug: string }> };
-export function generateMetadata({ params }: Props): Promise<Metadata> {
-  return params.then(({ slug }) => { const product = getProduct(slug); return product ? { title: product.seoTitle ?? product.title, description: product.seoDescription ?? product.description, alternates: { canonical: `/products/${slug}` }, openGraph: { title: product.title, description: product.description, images: product.imagePath ? [product.imagePath] : [] } } : { title: "Product" }; });
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { slug } = await params;
+  const product = await getProduct(slug);
+  return product ? { title: product.seoTitle ?? product.title, description: product.seoDescription ?? product.description, alternates: { canonical: `/products/${slug}` }, openGraph: { title: product.title, description: product.description, images: product.imagePath ? [product.imagePath] : [] } } : { title: "Product" };
 }
 
 export default async function ProductPage({ params }: Props) {
-  const { slug } = await params; const product = getProduct(slug); if (!product) notFound(); const settings = getSettings(); const reviews = getApprovedReviews(product.id);
+  const { slug } = await params; const product = await getProduct(slug); if (!product) notFound(); const [settings, reviews] = await Promise.all([getSettings(), getApprovedReviews(product.id)]);
   const origin = process.env.NEXT_PUBLIC_APP_ORIGIN ?? process.env.APP_ORIGIN ?? "http://localhost:3000";
   const productJsonLd = { "@context": "https://schema.org", "@type": "Product", name: product.title, description: product.description, image: product.images.map((image) => new URL(image.path, origin).toString()), sku: product.variants[0]?.sku, brand: { "@type": "Brand", name: "SHAFFAQ" }, offers: { "@type": "AggregateOffer", priceCurrency: "PKR", lowPrice: product.pricePkr, highPrice: Math.max(...product.variants.map((variant) => variant.pricePkr)), availability: product.available ? "https://schema.org/InStock" : "https://schema.org/OutOfStock", url: `${origin}/products/${slug}` } };
   const breadcrumbs = { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: [{ "@type": "ListItem", position: 1, name: "Home", item: origin }, { "@type": "ListItem", position: 2, name: "Shop", item: `${origin}/search` }, { "@type": "ListItem", position: 3, name: product.title, item: `${origin}/products/${slug}` }] };

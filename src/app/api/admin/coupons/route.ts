@@ -1,6 +1,6 @@
-import type Database from "better-sqlite3";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import type { DatabaseConnection } from "@/db";
 import { normalizeCouponCode } from "@/lib/coupons";
 import { authorizeAdminMutation, withAdminAudit } from "@/server/admin";
 import { apiErrorResponse, ApiError } from "@/server/http";
@@ -29,42 +29,42 @@ const patchSchema = z.discriminatedUnion("operation", [
   z.object({ operation: z.enum(["ARCHIVE", "RESTORE"]), id: z.number().int().positive(), expectedVersion: z.number().int().positive() }).strict(),
 ]);
 
-function validateScopes(connection: Database.Database, productIds: number[], collectionIds: number[]) {
+async function validateScopes(connection: DatabaseConnection, productIds: number[], collectionIds: number[]) {
   const uniqueProducts = [...new Set(productIds)];
   const uniqueCollections = [...new Set(collectionIds)];
   if (uniqueProducts.length) {
     const placeholders = uniqueProducts.map(() => "?").join(",");
-    const count = (connection.prepare(`SELECT COUNT(*) AS count FROM products WHERE id IN (${placeholders})`).get(...uniqueProducts) as { count: number }).count;
-    if (count !== uniqueProducts.length) throw new ApiError(422, "INVALID_SCOPE", "A selected product no longer exists.");
+    const count = await connection.prepare(`SELECT COUNT(*) AS count FROM products WHERE id IN (${placeholders})`).get<{ count: number }>(...uniqueProducts);
+    if (count?.count !== uniqueProducts.length) throw new ApiError(422, "INVALID_SCOPE", "A selected product no longer exists.");
   }
   if (uniqueCollections.length) {
     const placeholders = uniqueCollections.map(() => "?").join(",");
-    const count = (connection.prepare(`SELECT COUNT(*) AS count FROM collections WHERE id IN (${placeholders})`).get(...uniqueCollections) as { count: number }).count;
-    if (count !== uniqueCollections.length) throw new ApiError(422, "INVALID_SCOPE", "A selected collection no longer exists.");
+    const count = await connection.prepare(`SELECT COUNT(*) AS count FROM collections WHERE id IN (${placeholders})`).get<{ count: number }>(...uniqueCollections);
+    if (count?.count !== uniqueCollections.length) throw new ApiError(422, "INVALID_SCOPE", "A selected collection no longer exists.");
   }
   return { uniqueProducts, uniqueCollections };
 }
 
-function replaceScopes(connection: Database.Database, couponId: number, productIds: number[], collectionIds: number[]) {
-  connection.prepare("DELETE FROM coupon_products WHERE coupon_id = ?").run(couponId);
-  connection.prepare("DELETE FROM coupon_collections WHERE coupon_id = ?").run(couponId);
+async function replaceScopes(connection: DatabaseConnection, couponId: number, productIds: number[], collectionIds: number[]) {
+  await connection.prepare("DELETE FROM coupon_products WHERE coupon_id = ?").run(couponId);
+  await connection.prepare("DELETE FROM coupon_collections WHERE coupon_id = ?").run(couponId);
   const productInsert = connection.prepare("INSERT INTO coupon_products (coupon_id, product_id) VALUES (?, ?)");
-  for (const productId of productIds) productInsert.run(couponId, productId);
+  for (const productId of productIds) await productInsert.run(couponId, productId);
   const collectionInsert = connection.prepare("INSERT INTO coupon_collections (coupon_id, collection_id) VALUES (?, ?)");
-  for (const collectionId of collectionIds) collectionInsert.run(couponId, collectionId);
+  for (const collectionId of collectionIds) await collectionInsert.run(couponId, collectionId);
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const actor = authorizeAdminMutation(request);
+    const actor = await authorizeAdminMutation(request);
     const input = fields.parse(await request.json());
-    const id = withAdminAudit(actor, "promotions.coupon.create", "coupon", null, { code: input.code, type: input.type }, (connection) => {
-      const scopes = validateScopes(connection, input.productIds, input.collectionIds);
+    const id = await withAdminAudit(actor, "promotions.coupon.create", "coupon", null, { code: input.code, type: input.type }, async (connection) => {
+      const scopes = await validateScopes(connection, input.productIds, input.collectionIds);
       try {
-        const result = connection.prepare(`INSERT INTO coupons (code, description, type, value, enabled, starts_at, ends_at, minimum_subtotal_pkr, usage_limit, per_contact_limit)
+        const result = await connection.prepare(`INSERT INTO coupons (code, description, type, value, enabled, starts_at, ends_at, minimum_subtotal_pkr, usage_limit, per_contact_limit)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(input.code, input.description, input.type, input.value, input.enabled ? 1 : 0, input.startsAt, input.endsAt, input.minimumSubtotalPkr, input.usageLimit, input.perContactLimit);
-        const couponId = Number(result.lastInsertRowid);
-        replaceScopes(connection, couponId, scopes.uniqueProducts, scopes.uniqueCollections);
+        const couponId = result.lastInsertRowid;
+        await replaceScopes(connection, couponId, scopes.uniqueProducts, scopes.uniqueCollections);
         return couponId;
       } catch (error) {
         if (error instanceof Error && error.message.includes("UNIQUE")) throw new ApiError(409, "COUPON_CODE_CONFLICT", "A coupon with this code already exists.");
@@ -77,23 +77,23 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
-    const actor = authorizeAdminMutation(request);
+    const actor = await authorizeAdminMutation(request);
     const input = patchSchema.parse(await request.json());
-    const result = withAdminAudit(actor, `promotions.coupon.${input.operation.toLowerCase()}`, "coupon", String(input.id), { operation: input.operation }, (connection) => {
+    const result = await withAdminAudit(actor, `promotions.coupon.${input.operation.toLowerCase()}`, "coupon", String(input.id), { operation: input.operation }, async (connection) => {
       if (input.operation !== "SAVE") {
         const archived = input.operation === "ARCHIVE";
-        const update = connection.prepare("UPDATE coupons SET archived = ?, enabled = ?, version = version + 1, updated_at = unixepoch() * 1000 WHERE id = ? AND version = ?")
+        const update = await connection.prepare("UPDATE coupons SET archived = ?, enabled = ?, version = version + 1, updated_at = unixepoch() * 1000 WHERE id = ? AND version = ?")
           .run(archived ? 1 : 0, archived ? 0 : 1, input.id, input.expectedVersion);
         if (update.changes !== 1) throw new ApiError(409, "VERSION_CONFLICT", "This coupon changed in another session. Reload and try again.");
         return { id: input.id, version: input.expectedVersion + 1, archived };
       }
       const value = input.fields;
-      const scopes = validateScopes(connection, value.productIds, value.collectionIds);
+      const scopes = await validateScopes(connection, value.productIds, value.collectionIds);
       try {
-        const update = connection.prepare(`UPDATE coupons SET code = ?, description = ?, type = ?, value = ?, enabled = ?, starts_at = ?, ends_at = ?, minimum_subtotal_pkr = ?, usage_limit = ?, per_contact_limit = ?, version = version + 1, updated_at = unixepoch() * 1000 WHERE id = ? AND version = ?`)
+        const update = await connection.prepare("UPDATE coupons SET code = ?, description = ?, type = ?, value = ?, enabled = ?, starts_at = ?, ends_at = ?, minimum_subtotal_pkr = ?, usage_limit = ?, per_contact_limit = ?, version = version + 1, updated_at = unixepoch() * 1000 WHERE id = ? AND version = ?")
           .run(value.code, value.description, value.type, value.value, value.enabled ? 1 : 0, value.startsAt, value.endsAt, value.minimumSubtotalPkr, value.usageLimit, value.perContactLimit, input.id, input.expectedVersion);
         if (update.changes !== 1) throw new ApiError(409, "VERSION_CONFLICT", "This coupon changed in another session. Reload and try again.");
-        replaceScopes(connection, input.id, scopes.uniqueProducts, scopes.uniqueCollections);
+        await replaceScopes(connection, input.id, scopes.uniqueProducts, scopes.uniqueCollections);
         return { id: input.id, version: input.expectedVersion + 1 };
       } catch (error) {
         if (error instanceof ApiError) throw error;

@@ -11,17 +11,17 @@ const schema = z.object({
 
 export async function PATCH(request: NextRequest) {
   try {
-    const actor = authorizeAdminMutation(request); const input = schema.parse(await request.json());
+    const actor = await authorizeAdminMutation(request); const input = schema.parse(await request.json());
     if (new Set(input.sections.map((section) => section.id)).size !== input.sections.length || new Set(input.sections.map((section) => section.position)).size !== input.sections.length) throw new Error("Duplicate homepage section.");
-    withAdminAudit(actor, "cms.homepage.update", "homepage", "1", { visibleSections: input.sections.filter((section) => section.visible).length }, (connection) => {
+    await withAdminAudit(actor, "cms.homepage.update", "homepage", "1", { visibleSections: input.sections.filter((section) => section.visible).length }, async (connection) => {
       const settings = input.settings;
-      for (const imagePath of [settings.heroDesktopPath, settings.heroMobilePath, ...input.sections.map((section) => section.imagePath)]) if (imagePath && !connection.prepare("SELECT 1 FROM media_files WHERE public_path = ? AND replaced_at IS NULL").get(imagePath)) throw new ApiError(422, "MEDIA_NOT_FOUND", "A selected image is no longer available.");
-      const settingsUpdate = connection.prepare(`UPDATE settings SET announcement=?, hero_eyebrow=?, hero_title=?, hero_body=?, hero_cta_label=?, hero_cta_url=?, hero_desktop_path=?, hero_mobile_path=?, version=version+1, updated_at=unixepoch()*1000 WHERE id=1 AND version=?`)
+      for (const imagePath of [settings.heroDesktopPath, settings.heroMobilePath, ...input.sections.map((section) => section.imagePath)]) if (imagePath && !await connection.prepare("SELECT 1 FROM media_files WHERE public_path = ? AND replaced_at IS NULL").get(imagePath)) throw new ApiError(422, "MEDIA_NOT_FOUND", "A selected image is no longer available.");
+      const settingsUpdate = await connection.prepare(`UPDATE settings SET announcement=?, hero_eyebrow=?, hero_title=?, hero_body=?, hero_cta_label=?, hero_cta_url=?, hero_desktop_path=?, hero_mobile_path=?, version=version+1, updated_at=unixepoch()*1000 WHERE id=1 AND version=?`)
         .run(settings.announcement, settings.heroEyebrow, settings.heroTitle, settings.heroBody, settings.heroCtaLabel, settings.heroCtaUrl, settings.heroDesktopPath, settings.heroMobilePath, settings.version);
       if (settingsUpdate.changes !== 1) throw new ApiError(409, "VERSION_CONFLICT", "Homepage settings changed in another session. Reload and try again.");
-      connection.prepare("UPDATE homepage_sections SET position = position + 1000").run();
+      await connection.prepare("UPDATE homepage_sections SET position = position + 1000").run();
       const update = connection.prepare("UPDATE homepage_sections SET title=?, body=?, image_path=?, link_label=?, link_url=?, visible=?, position=?, updated_at=unixepoch()*1000 WHERE id=? AND type=?");
-      for (const section of input.sections) update.run(section.title, section.body, section.imagePath, section.linkLabel, section.linkUrl, section.visible ? 1 : 0, section.position, section.id, section.type);
+      for (const section of input.sections) await update.run(section.title, section.body, section.imagePath, section.linkLabel, section.linkUrl, section.visible ? 1 : 0, section.position, section.id, section.type);
     });
     return NextResponse.json({ ok: true, version: input.settings.version + 1 });
   } catch (error) { return apiErrorResponse(error); }

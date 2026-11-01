@@ -15,7 +15,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Searc
   const size = typeof params.size === "string" ? params.size : "";
   const sort = typeof params.sort === "string" ? params.sort : "featured";
   const page = typeof params.page === "string" && /^\d+$/.test(params.page) ? Number(params.page) : 1;
-  const result = listProducts({ q: q.length >= 2 ? q : undefined, size: ["52", "54", "56"].includes(size) ? size : undefined, sort, page });
+  const result = await listProducts({ q: q.length >= 2 ? q : undefined, size: ["52", "54", "56"].includes(size) ? size : undefined, sort, page });
   const makeHref = (nextPage: number) => {
     const query = new URLSearchParams();
     if (q) query.set("q", q); if (size) query.set("size", size); if (sort !== "featured") query.set("sort", sort); query.set("page", String(nextPage));
