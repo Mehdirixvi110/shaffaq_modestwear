@@ -181,8 +181,9 @@ export async function getAdminNewsletter() {
 export async function getAdminReviews(input: { status?: string } = {}) {
   const status = input.status && ["PENDING", "APPROVED", "REJECTED"].includes(input.status) ? input.status : null;
   return database.prepare(`SELECT r.id, r.rating, r.title, r.body, r.status, r.customer_name AS customerName,
+    r.source, r.city, r.featured, r.review_date AS reviewDate, r.version, r.product_id AS productId,
     r.created_at AS createdAt, p.title AS productTitle, o.reference, u.email AS moderatorEmail
-    FROM reviews r JOIN products p ON p.id = r.product_id JOIN orders o ON o.id = r.order_id
+    FROM reviews r LEFT JOIN products p ON p.id = r.product_id LEFT JOIN orders o ON o.id = r.order_id
     LEFT JOIN users u ON u.id = r.moderated_by ${status ? "WHERE r.status = ?" : ""}
     ORDER BY CASE r.status WHEN 'PENDING' THEN 0 WHEN 'APPROVED' THEN 1 ELSE 2 END, r.created_at DESC`).all<Record<string, string | number | null>>(...(status ? [status] : []));
 }

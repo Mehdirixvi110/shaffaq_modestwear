@@ -98,8 +98,8 @@ MIGRATION_DATABASE_URL=       # Supabase session pooler, port 5432; release comm
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SECRET_KEY=
 SUPABASE_STORAGE_BUCKET=shaffaq-media
-APP_ORIGIN=https://your-exact-domain.example
-NEXT_PUBLIC_APP_ORIGIN=https://your-exact-domain.example
+APP_ORIGIN=https://shaffaqmodestwear.pk
+NEXT_PUBLIC_APP_ORIGIN=https://shaffaqmodestwear.pk
 SESSION_SECRET=
 CSRF_SECRET=
 ```

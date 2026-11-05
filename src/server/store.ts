@@ -192,27 +192,80 @@ export async function getPolicy(slug: string) {
   return database.prepare("SELECT id, slug, title, content, is_template AS isTemplate, updated_at AS updatedAt FROM policies WHERE slug = ?").get<{ id: number; slug: string; title: string; content: string; isTemplate: number; updatedAt: number }>(slug);
 }
 
+export type ReviewSource = "CUSTOMER" | "ADMIN";
+
 export type ApprovedReview = {
   id: string;
   productId: number;
   productTitle: string;
+  source: ReviewSource;
   customerName: string;
+  city: string | null;
   rating: number;
   title: string | null;
   body: string;
   createdAt: number;
 };
 
+// Curated (source='ADMIN') reviews show the display name as entered; genuine
+// (source='CUSTOMER') submissions keep the first name + last initial masking.
+function maskPublicName<T extends { source: ReviewSource; customerName: string }>(row: T): T {
+  if (row.source !== "CUSTOMER") return row;
+  const names = row.customerName.trim().split(/\s+/);
+  const publicName = names.length > 1 ? `${names[0]} ${names[names.length - 1][0]}.` : names[0];
+  return { ...row, customerName: publicName };
+}
+
 export async function getApprovedReviews(productId?: number, limit = 8) {
   const safeLimit = Math.max(1, Math.min(24, limit));
-  const query = `SELECT r.id, r.product_id AS productId, p.title AS productTitle, r.customer_name AS customerName,
-    r.rating, r.title, r.body, r.created_at AS createdAt FROM reviews r
+  const query = `SELECT r.id, r.product_id AS productId, p.title AS productTitle, r.source, r.customer_name AS customerName,
+    r.city, r.rating, r.title, r.body, r.created_at AS createdAt FROM reviews r
     JOIN products p ON p.id = r.product_id WHERE r.status = 'APPROVED'${productId ? " AND r.product_id = ?" : ""}
     ORDER BY r.created_at DESC LIMIT ?`;
   const rows = await database.prepare(query).all<ApprovedReview>(...(productId ? [productId, safeLimit] : [safeLimit]));
-  return rows.map((row) => {
-    const names = row.customerName.trim().split(/\s+/);
-    const publicName = names.length > 1 ? `${names[0]} ${names[names.length - 1][0]}.` : names[0];
-    return { ...row, customerName: publicName };
-  });
+  return rows.map(maskPublicName);
+}
+
+export type FeaturedReview = {
+  id: string;
+  productId: number | null;
+  productTitle: string | null;
+  productSlug: string | null;
+  source: ReviewSource;
+  customerName: string;
+  city: string | null;
+  rating: number;
+  title: string | null;
+  body: string;
+  reviewDate: number;
+};
+
+export async function getFeaturedReviews(limit = 6) {
+  const safeLimit = Math.max(1, Math.min(24, limit));
+  const rows = await database.prepare(`SELECT r.id, r.product_id AS productId, p.title AS productTitle, p.slug AS productSlug,
+    r.source, r.customer_name AS customerName, r.city, r.rating, r.title, r.body, r.review_date AS reviewDate
+    FROM reviews r LEFT JOIN products p ON p.id = r.product_id
+    WHERE r.status = 'APPROVED' AND r.featured = 1
+    ORDER BY r.review_date DESC, r.created_at DESC LIMIT ?`).all<FeaturedReview>(safeLimit);
+  return rows.map(maskPublicName);
+}
+
+export async function getProductRatingSummary(productId: number) {
+  const row = await database.prepare("SELECT COUNT(*) AS count, AVG(rating) AS average FROM reviews WHERE product_id = ? AND status = 'APPROVED'").get<{ count: number; average: number | null }>(productId);
+  return { count: row?.count ?? 0, average: row?.average ?? null };
+}
+
+// The visible on-page rating (getProductRatingSummary) intentionally counts
+// every APPROVED review, including ADMIN-curated ones. The Product
+// aggregateRating JSON-LD, by contrast, is a machine-readable claim to search
+// engines and must reflect ONLY genuine customer reviews (source='CUSTOMER').
+export async function getProductCustomerRatingSummary(productId: number) {
+  const row = await database.prepare("SELECT COUNT(*) AS count, AVG(rating) AS average FROM reviews WHERE product_id = ? AND status = 'APPROVED' AND source = 'CUSTOMER'").get<{ count: number; average: number | null }>(productId);
+  return { count: row?.count ?? 0, average: row?.average ?? null };
+}
+
+export async function getPublishedProductNames(limit = 60) {
+  const safeLimit = Math.max(1, Math.min(200, limit));
+  const rows = await database.prepare("SELECT DISTINCT title FROM products WHERE status = 'PUBLISHED' ORDER BY title LIMIT ?").all<{ title: string }>(safeLimit);
+  return rows.map((row) => row.title);
 }

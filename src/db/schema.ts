@@ -400,20 +400,28 @@ export const newsletterSubscriptions = sqliteTable("newsletter_subscriptions", {
 
 export const reviews = sqliteTable("reviews", {
   id: text("id").primaryKey(),
-  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "restrict" }),
-  orderId: text("order_id").notNull().references(() => orders.id, { onDelete: "restrict" }),
-  orderItemId: integer("order_item_id").notNull().references(() => orderItems.id, { onDelete: "restrict" }).unique(),
+  productId: integer("product_id").references(() => products.id, { onDelete: "restrict" }),
+  orderId: text("order_id").references(() => orders.id, { onDelete: "restrict" }),
+  orderItemId: integer("order_item_id").references(() => orderItems.id, { onDelete: "restrict" }).unique(),
   customerName: text("customer_name").notNull(),
+  source: text("source", { enum: ["CUSTOMER", "ADMIN"] }).notNull().default("CUSTOMER"),
+  city: text("city"),
   rating: integer("rating").notNull(),
   title: text("title"),
   body: text("body").notNull(),
   status: text("status", { enum: ["PENDING", "APPROVED", "REJECTED"] }).notNull().default("PENDING"),
+  featured: integer("featured", { mode: "boolean" }).notNull().default(false),
+  reviewDate: integer("review_date").notNull().default(now),
   moderatedBy: integer("moderated_by").references(() => users.id, { onDelete: "set null" }),
   moderatedAt: integer("moderated_at"),
+  version: integer("version").notNull().default(1),
   createdAt: integer("created_at").notNull().default(now),
+  updatedAt: integer("updated_at").notNull().default(now),
 }, (table) => [
   index("reviews_product_status_idx").on(table.productId, table.status, table.createdAt),
+  index("reviews_featured_idx").on(table.featured, table.status),
   check("reviews_rating_range", sql`${table.rating} >= 1 AND ${table.rating} <= 5`),
+  check("reviews_source", sql`${table.source} IN ('CUSTOMER','ADMIN')`),
 ]);
 
 export const shippingRegions = sqliteTable("shipping_regions", {

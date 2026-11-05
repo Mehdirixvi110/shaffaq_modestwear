@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { getApprovedReviews, listCategoryTiles, type ProductSummary } from "@/server/store";
+import { getFeaturedReviews, listCategoryTiles, type ProductSummary } from "@/server/store";
 import { ProductGrid } from "./product-grid";
 
 type HomeSection = {
@@ -14,7 +14,7 @@ type HomeSection = {
 };
 
 export async function HomeSections({ sections, featured }: { sections: HomeSection[]; featured: ProductSummary[] }) {
-  const [categories, approvedReviews] = await Promise.all([listCategoryTiles(), getApprovedReviews(undefined, 6)]);
+  const [categories, featuredReviews] = await Promise.all([listCategoryTiles(), getFeaturedReviews(6)]);
   return sections.map((section) => {
     if (section.type === "CATEGORY_GRID") return (
       <section className="section shell" key={section.id} aria-labelledby={`section-${section.id}`}>
@@ -46,8 +46,8 @@ export async function HomeSections({ sections, featured }: { sections: HomeSecti
         <div className="editorial-copy"><p className="eyebrow">Editorial</p><h2 id={`section-${section.id}`}>{section.title}</h2>{section.body ? <p>{section.body}</p> : null}{section.linkLabel && section.linkUrl ? <Link className="text-link" href={section.linkUrl}>{section.linkLabel} →</Link> : null}</div>
       </section>
     );
-    if (section.type === "REVIEWS") return approvedReviews.length ? (
-      <section className="section shell" key={section.id} aria-labelledby={`section-${section.id}`}><div className="section-heading"><div><p className="eyebrow">Customer notes</p><h2 id={`section-${section.id}`}>{section.title}</h2></div></div><div className="review-grid">{approvedReviews.map((review) => <article className="review-card" key={review.id}><strong aria-label={`${review.rating} out of 5 stars`}>{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}</strong>{review.title ? <h3>{review.title}</h3> : null}<p>{review.body}</p><small>{review.customerName} · verified delivered order · {review.productTitle}</small></article>)}</div></section>
+    if (section.type === "REVIEWS") return featuredReviews.length ? (
+      <section className="section shell" key={section.id} aria-labelledby={`section-${section.id}`}><div className="section-heading"><div><p className="eyebrow">Customer notes</p><h2 id={`section-${section.id}`}>{section.title}</h2></div></div><div className="review-grid">{featuredReviews.map((review) => <article className="review-card" key={review.id}><strong aria-label={`${review.rating} out of 5 stars`}>{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}</strong>{review.title ? <h3>{review.title}</h3> : null}<p>{review.body}</p><small>{review.customerName}{review.city ? ` · ${review.city}` : ""}{review.source === "CUSTOMER" ? " · verified delivered order" : ""}{review.productSlug && review.productTitle ? <> · <Link href={`/products/${review.productSlug}`}>{review.productTitle}</Link></> : null}</small></article>)}</div></section>
     ) : (
       <section className="section review-empty shell" key={section.id} aria-labelledby={`section-${section.id}`}><p className="eyebrow">Customer notes</p><h2 id={`section-${section.id}`}>{section.title}</h2><p>{section.body ?? "No approved reviews yet."}</p><span>Reviews appear only after submission through a delivered-order capability and administrator moderation.</span></section>
     );

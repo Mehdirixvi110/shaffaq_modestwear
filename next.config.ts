@@ -19,15 +19,20 @@ const nextConfig: NextConfig = {
   },
   serverExternalPackages: ["better-sqlite3", "@node-rs/argon2", "sharp", "postgres"],
   async headers() {
-    return [{
-      source: "/:path*",
-      headers: [
-        { key: "X-Content-Type-Options", value: "nosniff" },
-        { key: "X-Frame-Options", value: "DENY" },
-        { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-        { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
-      ],
-    }];
+    // HSTS is only meaningful (and only valid) over HTTPS, so it is gated to
+    // production builds. Local dev and the http://localhost production smoke
+    // must not advertise it. The nonce-based Content-Security-Policy is set
+    // per-request in src/proxy.ts (a static header cannot carry a fresh nonce).
+    const securityHeaders = [
+      { key: "X-Content-Type-Options", value: "nosniff" },
+      { key: "X-Frame-Options", value: "DENY" },
+      { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+      { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+    ];
+    if (process.env.NODE_ENV === "production") {
+      securityHeaders.push({ key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" });
+    }
+    return [{ source: "/:path*", headers: securityHeaders }];
   },
 };
 

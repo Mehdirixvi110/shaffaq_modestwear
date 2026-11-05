@@ -1,11 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import { AppChrome } from "@/components/app-chrome";
+import { PurchaseNotifications } from "@/components/purchase-notifications";
+import { WhatsappChatButton } from "@/components/whatsapp-chat-button";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getNavigation, getSettings } from "@/server/store";
 import "./globals.css";
 
-const origin = process.env.NEXT_PUBLIC_APP_ORIGIN ?? process.env.APP_ORIGIN ?? "http://localhost:3000";
+const origin = process.env.NEXT_PUBLIC_APP_ORIGIN ?? process.env.APP_ORIGIN ?? "https://shaffaqmodestwear.pk";
 
 export async function generateMetadata(): Promise<Metadata> {
   const settings = await getSettings();
@@ -34,6 +36,8 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
         >
           {children}
         </AppChrome>
+        <PurchaseNotifications />
+        <WhatsappChatButton whatsappNumber={settings.whatsappNumber} />
       </body>
     </html>
   );

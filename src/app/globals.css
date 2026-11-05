@@ -305,6 +305,10 @@
   .review-card h3 { margin: .55rem 0; }
   .review-card small, .product-reviews small { display: block; margin-top: .7rem; color: var(--muted); }
   .product-reviews article { padding: .8rem 0; border-top: 1px solid var(--line); }
+  .product-rating { display: flex; align-items: center; gap: .4rem; margin: .3rem 0 .6rem; color: var(--muted); font-size: .9rem; }
+  .product-rating span { color: #b8860b; letter-spacing: .1em; }
+  .review-star-input { display: inline-flex; gap: .15rem; }
+  .review-star-button { border: 0; background: none; padding: 0 .1rem; font-size: 1.4rem; line-height: 1; color: #b8860b; cursor: pointer; }
   .customer-actions { max-width: 900px; margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--line); }
   .customer-actions h2 { margin: 1.5rem 0 1rem; font-size: 2rem; }
   .customer-action-form { display: grid; grid-template-columns: minmax(160px, .35fr) 1fr auto; gap: .8rem; align-items: end; margin: 1rem 0; padding: 1rem; background: var(--ivory); }
@@ -331,6 +335,32 @@
   .print-document h1 { font-size: 3rem; }
   .print-document h2 { margin: 1.5rem 0 .6rem; font-size: 1.5rem; }
   .print-totals { width: min(100%, 420px); margin: 1.5rem 0 1.5rem auto; }
+
+  .purchase-note { position: fixed; z-index: 60; bottom: 1.1rem; right: 1.1rem; max-width: min(340px, calc(100vw - 2rem)); animation: purchase-note-in .35s ease both; }
+  .purchase-note__body { display: flex; align-items: flex-start; gap: .6rem; padding: .85rem 1rem; background: var(--pearl); border: 1px solid var(--line); border-left: 3px solid var(--rose); box-shadow: 0 10px 30px rgba(47, 33, 29, .15); }
+  .purchase-note__text { margin: 0; font-size: .82rem; line-height: 1.4; color: var(--ink); }
+  .purchase-note__close { flex-shrink: 0; margin-left: auto; border: 0; background: none; padding: 0 .1rem; font-size: 1.2rem; line-height: 1; color: var(--muted); cursor: pointer; }
+  @keyframes purchase-note-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* 'Chat with us' floating WhatsApp button. Bottom-LEFT so it can never overlap the
+     bottom-right social-proof toast (.purchase-note). Round tap target > 44px, WhatsApp
+     green, visible focus ring, a pulsing ring (::after) and gentle bob — both disabled
+     under prefers-reduced-motion. Rendered storefront-only by WhatsappChatButton. */
+  .whatsapp-chat { position: fixed; z-index: 60; left: 1.1rem; bottom: 1.1rem; display: inline-flex; align-items: center; justify-content: center; width: 3.25rem; height: 3.25rem; border-radius: 50%; background: #25d366; color: #fff; box-shadow: 0 10px 30px rgba(47, 33, 29, .28); animation: whatsapp-bob 2.8s ease-in-out infinite; }
+  .whatsapp-chat::after { content: ""; position: absolute; inset: 0; border-radius: 50%; animation: whatsapp-pulse 2.2s ease-out infinite; }
+  .whatsapp-chat:hover { background: #1ebe5b; }
+  .whatsapp-chat:focus-visible { outline: 2px solid #7a3f4b; outline-offset: 4px; }
+  .whatsapp-chat__icon { position: relative; z-index: 1; width: 1.75rem; height: 1.75rem; }
+  .whatsapp-chat__label { position: absolute; left: calc(100% + .6rem); white-space: nowrap; padding: .4rem .7rem; border-radius: .4rem; background: var(--espresso); color: var(--pearl); font-size: .74rem; font-weight: 700; letter-spacing: .04em; opacity: 0; transform: translateX(-.25rem); pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
+  .whatsapp-chat:hover .whatsapp-chat__label, .whatsapp-chat:focus-visible .whatsapp-chat__label { opacity: 1; transform: translateX(0); }
+  @keyframes whatsapp-pulse { 0% { box-shadow: 0 0 0 0 rgba(37, 211, 102, .5); } 70% { box-shadow: 0 0 0 14px rgba(37, 211, 102, 0); } 100% { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); } }
+  @keyframes whatsapp-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+
+  @media (max-width: 480px) {
+    /* Toast starts to the right of the bottom-left chat button so the full-width mobile toast never overlaps it. */
+    .purchase-note { left: 5rem; right: 1rem; bottom: .9rem; max-width: none; }
+    .whatsapp-chat { left: 1rem; bottom: .9rem; }
+  }
 
   @media print {
     .admin-sidebar, .print-hide, .skip-link { display: none !important; }
@@ -416,5 +446,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+    .purchase-note { animation: none; }
+    .whatsapp-chat, .whatsapp-chat::after { animation: none; }
   }
 }

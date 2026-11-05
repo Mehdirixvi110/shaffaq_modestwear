@@ -15,6 +15,20 @@
       "when": 1793100698833,
       "tag": "0001_cold_mister_sinister",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793700848235,
+      "tag": "0002_graceful_typhoid_mary",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793725816250,
+      "tag": "0003_sudden_pestilence",
+      "breakpoints": true
     }
   ]
 }

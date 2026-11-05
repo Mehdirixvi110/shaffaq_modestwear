@@ -31,15 +31,81 @@ async function fillCheckout(page, suffix) {
   await page.getByLabel("City").fill("Karachi");
 }
 
+// --- Hardening checks: favicon, strict CSP, and the WhatsApp chat button ---
+const cspViolations = [];
+const iconErrors = [];
+const pageErrors = [];
+
+// Attach to every page so a CSP violation or missing favicon anywhere fails the run.
+// Benign RSC prefetch aborts (net::ERR_ABORTED) are ignored.
+function watchPage(page, label) {
+  page.on("console", (message) => {
+    const text = message.text();
+    if (/Content Security Policy|Refused to (execute|evaluate|load|apply|connect|frame|create)/i.test(text) && !/ERR_ABORTED/i.test(text)) {
+      cspViolations.push(`[${label}] ${text}`);
+    }
+  });
+  page.on("pageerror", (error) => { pageErrors.push(`[${label}] ${error.message}`); });
+  page.on("response", (response) => {
+    if (response.status() === 404 && /\/(icon\.png|favicon\.ico|apple-icon)(\?|$)/i.test(response.url())) {
+      iconErrors.push(`[${label}] 404 ${response.url()}`);
+    }
+  });
+}
+
+async function assertFaviconLoads(page, label) {
+  const iconHref = await page.locator('link[rel~="icon"]').first().getAttribute("href");
+  assert(Boolean(iconHref), `${label}: no <link rel="icon"> injected by Next metadata.`);
+  const iconResponse = await page.request.get(new URL(iconHref, baseURL).toString());
+  assert(iconResponse.status() === 200, `${label}: favicon did not return 200 (got ${iconResponse.status()}).`);
+  assert((iconResponse.headers()["content-type"] ?? "").includes("image/png"), `${label}: favicon is not image/png.`);
+}
+
+async function assertChatButton(page, label) {
+  const chat = page.locator("a.whatsapp-chat");
+  await chat.waitFor({ state: "visible" });
+  const href = await chat.getAttribute("href");
+  assert(Boolean(href?.startsWith(`https://wa.me/${whatsappNumber}?text=`)), `${label}: chat button href is wrong (${href}).`);
+  assert((await chat.getAttribute("aria-label")) === "Chat with us on WhatsApp", `${label}: chat button aria-label is wrong.`);
+  assert((await chat.getAttribute("target")) === "_blank", `${label}: chat button does not open a new tab (target).`);
+  const rel = (await chat.getAttribute("rel")) ?? "";
+  assert(rel.includes("noopener") && rel.includes("noreferrer"), `${label}: chat button rel is missing noopener/noreferrer.`);
+  await chat.focus();
+  assert(await chat.evaluate((element) => element === document.activeElement), `${label}: chat button is not keyboard-focusable.`);
+}
+
+// Inject a transient toast with the real .purchase-note CSS and assert its box never
+// intersects the chat button box — without waiting for the 4-5 minute toast timer.
+async function assertNoToastOverlap(page, label) {
+  const rects = await page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.className = "purchase-note";
+    probe.innerHTML = '<div class="purchase-note__body"><p class="purchase-note__text"><strong>Probe</strong> from Lahore purchased <strong>Sample piece</strong></p><button class="purchase-note__close" aria-label="Dismiss notification">\u00d7</button></div>';
+    document.body.appendChild(probe);
+    const chat = document.querySelector("a.whatsapp-chat");
+    const box = (element) => { const r = element.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
+    const result = { toast: box(probe), chat: chat ? box(chat) : null };
+    probe.remove();
+    return result;
+  });
+  assert(rects.chat, `${label}: chat button missing for the overlap probe.`);
+  const overlap = !(rects.chat.right <= rects.toast.left || rects.chat.left >= rects.toast.right || rects.chat.bottom <= rects.toast.top || rects.chat.top >= rects.toast.bottom);
+  assert(!overlap, `${label}: chat button overlaps the sale toast (chat ${JSON.stringify(rects.chat)}, toast ${JSON.stringify(rects.toast)}).`);
+}
+
 const browser = await chromium.launch({ executablePath: "C:/Program Files/Google/Chrome/Application/chrome.exe", headless: true });
 try {
   progress("storefront, newsletter, wishlist, and COD checkout");
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   context.setDefaultNavigationTimeout(90_000);
   const page = await context.newPage();
+  watchPage(page, "desktop-storefront");
   await page.goto(baseURL);
   assert((await page.title()).includes("SHAFFAQ"), "Homepage metadata is missing SHAFFAQ.");
   assert(await page.locator(".product-card").count() >= 4, "Homepage product grid did not render.");
+  await assertFaviconLoads(page, "desktop-storefront");
+  await assertChatButton(page, "desktop-storefront");
+  await assertNoToastOverlap(page, "desktop-storefront");
   await page.getByLabel("Newsletter email").fill("smoke-newsletter@example.test");
   await page.getByRole("checkbox", { name: /explicitly consent/ }).check();
   await page.getByRole("button", { name: "Record consent" }).click();
@@ -70,6 +136,7 @@ try {
   const inquiryContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   inquiryContext.setDefaultNavigationTimeout(90_000);
   const inquiryPage = await inquiryContext.newPage();
+  watchPage(inquiryPage, "desktop-inquiry");
   await addFirstProduct(inquiryPage);
   await fillCheckout(inquiryPage, "whatsapp");
   await inquiryPage.getByRole("button", { name: "Create WhatsApp inquiry" }).click();
@@ -83,6 +150,7 @@ try {
   const adminContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   adminContext.setDefaultNavigationTimeout(90_000);
   const adminPage = await adminContext.newPage();
+  watchPage(adminPage, "admin");
   await adminPage.goto(`${baseURL}/admin`);
   await adminPage.waitForURL(/\/admin\/login/);
   await adminPage.getByLabel("Email").fill(adminEmail);
@@ -90,6 +158,7 @@ try {
   await adminPage.getByRole("button", { name: "Sign in" }).click();
   await adminPage.waitForURL(`${baseURL}/admin`);
   await adminPage.getByRole("heading", { name: "Dashboard" }).waitFor();
+  assert((await adminPage.locator("a.whatsapp-chat").count()) === 0, "Chat button must be absent on /admin.");
   await adminPage.goto(`${baseURL}/admin/products`);
   await adminPage.getByRole("heading", { name: "Products" }).waitFor();
   await adminPage.goto(`${baseURL}/admin/categories`);
@@ -169,6 +238,7 @@ try {
   const couponContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
   couponContext.setDefaultNavigationTimeout(90_000);
   const couponPage = await couponContext.newPage();
+  watchPage(couponPage, "desktop-coupon");
   await addFirstProduct(couponPage);
   await couponPage.goto(`${baseURL}/cart`);
   await couponPage.getByLabel("Coupon code").fill("smoke10");
@@ -183,15 +253,35 @@ try {
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   mobileContext.setDefaultNavigationTimeout(90_000);
   const mobilePage = await mobileContext.newPage();
+  watchPage(mobilePage, "mobile");
   await mobilePage.goto(baseURL);
   const columns = await mobilePage.locator(".product-grid").first().evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length);
   assert(columns === 2, `Expected two mobile product columns, received ${columns}.`);
+  await assertFaviconLoads(mobilePage, "mobile");
+  await assertChatButton(mobilePage, "mobile");
+  await assertNoToastOverlap(mobilePage, "mobile");
   await mobilePage.getByRole("button", { name: "Open navigation" }).click();
   await mobilePage.getByRole("dialog", { name: "Site navigation" }).waitFor();
   await mobilePage.getByRole("button", { name: "Close navigation" }).click();
   await mobileContext.close();
 
-  console.log("Browser smoke passed: desktop storefront, wishlist, newsletter consent/unsubscribe, COD and coupon checkout, WhatsApp inquiry, operational admin routes, inventory adjustment, and Sharp media re-encoding, plus 390px navigation/grid.");
+  progress("prefers-reduced-motion disables the chat button animation");
+  const motionContext = await browser.newContext({ viewport: { width: 1440, height: 1000 }, reducedMotion: "reduce" });
+  motionContext.setDefaultNavigationTimeout(90_000);
+  const motionPage = await motionContext.newPage();
+  watchPage(motionPage, "reduced-motion");
+  await motionPage.goto(baseURL);
+  const motionChat = motionPage.locator("a.whatsapp-chat");
+  await motionChat.waitFor({ state: "visible" });
+  const animation = await motionChat.evaluate((element) => ({ base: getComputedStyle(element).animationName, ring: getComputedStyle(element, "::after").animationName }));
+  assert(animation.base === "none" && animation.ring === "none", `Chat button animation is not disabled under prefers-reduced-motion: ${JSON.stringify(animation)}.`);
+  await motionContext.close();
+
+  assert(cspViolations.length === 0, `CSP violations detected:\n${cspViolations.join("\n")}`);
+  assert(iconErrors.length === 0, `Favicon/icon 404 detected:\n${iconErrors.join("\n")}`);
+  if (pageErrors.length) console.warn(`[browser-smoke] non-fatal page errors:\n${pageErrors.join("\n")}`);
+
+  console.log("Browser smoke passed: desktop storefront, wishlist, newsletter consent/unsubscribe, COD and coupon checkout, WhatsApp inquiry, operational admin routes, inventory adjustment, and Sharp media re-encoding, plus 390px navigation/grid, favicon, strict-CSP (zero violations), and the storefront-only WhatsApp chat button (desktop + mobile, no toast overlap).");
 } finally {
   await browser.close();
 }
