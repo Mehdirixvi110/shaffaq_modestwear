@@ -255,6 +255,7 @@
   .admin-sidebar nav { display: grid; gap: .1rem; }
   .admin-sidebar nav a { padding: .48rem .7rem; color: #e7d9d0; }
   .admin-sidebar nav a:hover { background: rgba(255,255,255,.08); }
+  .admin-nav-badge { display: inline-block; margin-left: .4rem; padding: 0 .4rem; min-width: 1.2rem; border-radius: .6rem; background: #c0392b; color: white; font-size: .68rem; line-height: 1.2rem; text-align: center; }
   .admin-user { margin-top: 1.5rem; color: #cdbbb2; font-size: .78rem; }
   .admin-main { min-width: 0; padding: clamp(1.5rem, 4vw, 4rem); }
   .admin-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 2rem; }
@@ -356,6 +357,28 @@
   @keyframes whatsapp-pulse { 0% { box-shadow: 0 0 0 0 rgba(37, 211, 102, .5); } 70% { box-shadow: 0 0 0 14px rgba(37, 211, 102, 0); } 100% { box-shadow: 0 0 0 0 rgba(37, 211, 102, 0); } }
   @keyframes whatsapp-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 
+  /* Lead-capture inquiry modal. The layer sits at z-index 200 (above the drawer at 100
+     and both floating widgets at 60) and is centred, so it never overlaps the bottom-LEFT
+     .whatsapp-chat or bottom-RIGHT .purchase-note. The open animation respects
+     prefers-reduced-motion (disabled in the reduce block below). */
+  .inquiry { margin-top: .75rem; }
+  .inquiry-trigger { margin-top: 0; }
+  .inquiry-layer { position: fixed; z-index: 200; inset: 0; display: grid; place-items: center; padding: 1.25rem; background: rgba(24, 17, 14, .55); overflow-y: auto; }
+  .inquiry-dialog { width: min(100%, 460px); max-height: calc(100vh - 2.5rem); overflow-y: auto; background: var(--pearl); border: 1px solid var(--line); box-shadow: 0 24px 60px rgba(47, 33, 29, .28); padding: 1.25rem 1.4rem 1.5rem; animation: inquiry-in .2s ease both; }
+  .inquiry-dialog__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: .75rem; }
+  .inquiry-dialog__head h2 { margin: 0; font-family: var(--serif); font-size: 1.4rem; font-weight: 400; }
+  .inquiry-close { border: 0; background: none; padding: 0 .1rem; font-size: 1.6rem; line-height: 1; color: var(--muted); cursor: pointer; }
+  .inquiry-close:focus-visible { outline: 2px solid var(--espresso); outline-offset: 2px; }
+  .inquiry-selection { margin: 0 0 .9rem; font-size: .85rem; color: var(--ink); }
+  .inquiry-sku { color: var(--muted); }
+  .inquiry-form { display: grid; gap: .75rem; }
+  .inquiry-form label { display: grid; gap: .3rem; font-size: .8rem; font-weight: 600; letter-spacing: .02em; }
+  .inquiry-form input, .inquiry-form textarea { width: 100%; padding: .6rem .7rem; border: 1px solid var(--line); background: var(--pearl); font: inherit; }
+  .inquiry-form input:focus-visible, .inquiry-form textarea:focus-visible { outline: 2px solid var(--espresso); outline-offset: 1px; }
+  .inquiry-honeypot { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+  .inquiry-live:empty { display: none; }
+  @keyframes inquiry-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
   @media (max-width: 480px) {
     /* Toast starts to the right of the bottom-left chat button so the full-width mobile toast never overlaps it. */
     .purchase-note { left: 5rem; right: 1rem; bottom: .9rem; max-width: none; }
@@ -448,5 +471,6 @@
     *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
     .purchase-note { animation: none; }
     .whatsapp-chat, .whatsapp-chat::after { animation: none; }
+    .inquiry-dialog { animation: none; }
   }
 }

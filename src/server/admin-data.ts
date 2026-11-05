@@ -188,6 +188,21 @@ export async function getAdminReviews(input: { status?: string } = {}) {
     ORDER BY CASE r.status WHEN 'PENDING' THEN 0 WHEN 'APPROVED' THEN 1 ELSE 2 END, r.created_at DESC`).all<Record<string, string | number | null>>(...(status ? [status] : []));
 }
 
+export async function getAdminLeads(input: { status?: string } = {}) {
+  const status = input.status && ["NEW", "CONTACTED", "CLOSED"].includes(input.status) ? input.status : null;
+  return database.prepare(`SELECT l.id, l.source, l.status, l.customer_name AS customerName, l.phone, l.email, l.city,
+    l.product_id AS productId, l.product_name_snapshot AS productNameSnapshot, l.selected_options AS selectedOptions,
+    l.variant_sku AS variantSku, l.message, l.admin_notes AS adminNotes, l.version, l.created_at AS createdAt,
+    l.updated_at AS updatedAt, p.title AS productTitle
+    FROM leads l LEFT JOIN products p ON p.id = l.product_id ${status ? "WHERE l.status = ?" : ""}
+    ORDER BY l.created_at DESC`).all<Record<string, string | number | null>>(...(status ? [status] : []));
+}
+
+export async function getLeadsNewCount(): Promise<number> {
+  const row = await database.prepare("SELECT COUNT(*) AS count FROM leads WHERE status = 'NEW'").get<{ count: number }>();
+  return row?.count ?? 0;
+}
+
 export async function getAdminCustomers(input: { q?: string } = {}) {
   const parameters: string[] = [];
   let where = "";

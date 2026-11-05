@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { ProductInquiry } from "@/components/product-inquiry-form";
 import { formatDate } from "@/lib/format";
-import { getPolicy } from "@/server/store";
+import { getPolicy, getSettings } from "@/server/store";
 
 export const dynamic = "force-dynamic";
 type Props = { params: Promise<{ slug: string }> };
@@ -13,5 +14,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ContentPage({ params }: Props) {
   const { slug } = await params; const page = await getPolicy(slug); if (!page) notFound();
-  return <article className="inner-page prose shell"><p className="eyebrow">SHAFFAQ information</p><h1>{page.title}</h1>{page.isTemplate ? <div className="notice-box">This is a persisted template requiring business, legal, and tax review before public launch.</div> : null}<div className="policy-copy">{page.content.split("\n").map((paragraph, index) => paragraph ? <p key={index}>{paragraph}</p> : <br key={index} />)}</div><p className="updated-at">Last updated {formatDate(page.updatedAt)}</p></article>;
+  const settings = slug === "contact" ? await getSettings() : null;
+  return <article className="inner-page prose shell"><p className="eyebrow">SHAFFAQ information</p><h1>{page.title}</h1>{page.isTemplate ? <div className="notice-box">This is a persisted template requiring business, legal, and tax review before public launch.</div> : null}<div className="policy-copy">{page.content.split("\n").map((paragraph, index) => paragraph ? <p key={index}>{paragraph}</p> : <br key={index} />)}</div>{settings ? <div className="contact-inquiry"><ProductInquiry source="CONTACT" whatsappNumber={settings.whatsappNumber} /></div> : null}<p className="updated-at">Last updated {formatDate(page.updatedAt)}</p></article>;
 }

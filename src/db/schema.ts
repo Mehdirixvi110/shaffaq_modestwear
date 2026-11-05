@@ -424,6 +424,31 @@ export const reviews = sqliteTable("reviews", {
   check("reviews_source", sql`${table.source} IN ('CUSTOMER','ADMIN')`),
 ]);
 
+export const leads = sqliteTable("leads", {
+  id: text("id").primaryKey(),
+  source: text("source", { enum: ["PRODUCT_INQUIRY", "CONTACT"] }).notNull().default("PRODUCT_INQUIRY"),
+  status: text("status", { enum: ["NEW", "CONTACTED", "CLOSED"] }).notNull().default("NEW"),
+  customerName: text("customer_name").notNull(),
+  phone: text("phone").notNull(),
+  city: text("city"),
+  email: text("email"),
+  productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
+  productNameSnapshot: text("product_name_snapshot"),
+  selectedOptions: text("selected_options"),
+  variantSku: text("variant_sku"),
+  message: text("message"),
+  adminNotes: text("admin_notes"),
+  version: integer("version").notNull().default(1),
+  createdAt: integer("created_at").notNull().default(now),
+  updatedAt: integer("updated_at").notNull().default(now),
+}, (table) => [
+  index("leads_status_idx").on(table.status),
+  index("leads_created_idx").on(table.createdAt),
+  index("leads_product_idx").on(table.productId),
+  check("leads_status", sql`${table.status} IN ('NEW','CONTACTED','CLOSED')`),
+  check("leads_source", sql`${table.source} IN ('PRODUCT_INQUIRY','CONTACT')`),
+]);
+
 export const shippingRegions = sqliteTable("shipping_regions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   code: text("code").notNull().unique(),

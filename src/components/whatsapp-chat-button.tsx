@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { whatsappUrl } from "@/lib/whatsapp";
 
 // Friendly default greeting pre-filled in the WhatsApp compose box.
 const GREETING = "Hello SHAFFAQ! I'd like to ask about your abayas and scarves.";
@@ -11,10 +12,8 @@ export function WhatsappChatButton({ whatsappNumber }: { whatsappNumber: string 
   if (pathname.startsWith("/admin")) return null;
 
   // Fail safe: render nothing unless a plausible WhatsApp number is configured.
-  const digits = whatsappNumber?.replaceAll(/\D/g, "") ?? "";
-  if (!/^\d{10,15}$/.test(digits)) return null;
-
-  const href = `https://wa.me/${digits}?text=${encodeURIComponent(GREETING)}`;
+  const href = whatsappUrl(whatsappNumber, GREETING);
+  if (!href) return null;
 
   return (
     <a

@@ -3,12 +3,14 @@
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { formatPkr } from "@/lib/format";
+import { whatsappUrl } from "@/lib/whatsapp";
 import { csrfFetch, responseMessage } from "./csrf-fetch";
+import { ProductInquiry } from "./product-inquiry-form";
 
 type Option = { id: number; name: string; required: number; values: Array<{ id: number; value: string }> };
 type Variant = { id: number; title: string; sku: string; pricePkr: number; compareAtPkr: number | null; stock: number; options: Record<string, string> };
 
-export function ProductPurchase({ title, slug, options, variants, whatsappNumber }: { title: string; slug: string; options: Option[]; variants: Variant[]; whatsappNumber: string | null }) {
+export function ProductPurchase({ productId, title, slug, options, variants, whatsappNumber }: { productId: number; title: string; slug: string; options: Option[]; variants: Variant[]; whatsappNumber: string | null }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [quantity, setQuantity] = useState(1);
@@ -39,10 +41,10 @@ export function ProductPurchase({ title, slug, options, variants, whatsappNumber
     }
   }
 
-  const whatsappDigits = whatsappNumber?.replaceAll(/\D/g, "") ?? "";
   const inquiryText = variant
     ? `Hello SHAFFAQ, I would like to ask about ${title} (${variant.sku}; ${Object.entries(variant.options).map(([key, value]) => `${key}: ${value}`).join(", ")}). Please confirm availability. ${typeof window === "undefined" ? "" : window.location.origin}/products/${slug}`
     : `Hello SHAFFAQ, I would like to ask about ${title}. Please confirm options and availability.`;
+  const whatsappHref = whatsappUrl(whatsappNumber, inquiryText);
 
   return (
     <div className="purchase-panel-controls">
@@ -57,7 +59,8 @@ export function ProductPurchase({ title, slug, options, variants, whatsappNumber
       <label className="quantity-field"><span>Quantity</span><input type="number" min={1} max={Math.min(20, variant?.stock ?? 20)} value={quantity} onChange={(event) => setQuantity(Math.max(1, Math.min(20, Number(event.target.value) || 1)))} /></label>
       <button className="button button--dark button--full" type="button" disabled={busy || !variant || variant.stock < 1} onClick={() => add(false)}>{busy ? "Adding…" : "Add to bag"}</button>
       <button className="button button--outline button--full" type="button" disabled={busy || !variant || variant.stock < 1} onClick={() => add(true)}>Buy now</button>
-      {whatsappDigits ? <a className="whatsapp-link" href={`https://wa.me/${whatsappDigits}?text=${encodeURIComponent(inquiryText)}`} target="_blank" rel="noreferrer">Ask about this product on WhatsApp</a> : null}
+      {whatsappHref ? <a className="whatsapp-link" href={whatsappHref} target="_blank" rel="noreferrer">Ask about this product on WhatsApp</a> : null}
+      <ProductInquiry productId={productId} title={title} slug={slug} whatsappNumber={whatsappNumber} variant={variant ? { id: variant.id, sku: variant.sku, options: variant.options } : null} />
       {status ? <p className="form-status" role="status">{status}</p> : null}
       <p className="fine-print">Cash on delivery is confirmed by SHAFFAQ after submission. A WhatsApp inquiry does not confirm an order or payment.</p>
     </div>

@@ -7,6 +7,15 @@ export const quantitySchema = z.coerce.number().int().min(1).max(20);
 export const cleanText = (max: number) => z.string().trim().min(1).max(max);
 export const nullableText = (max: number) => z.string().trim().max(max).transform((value) => value || null).nullable();
 
+// Canonicalise a Pakistani mobile number to +923XXXXXXXXX. Assumes the input has
+// already matched the pkPhone regex ^(?:\+92|92|0)?3\d{9}$, so the trailing 10 digits
+// are always the national 3XXXXXXXXX subscriber number.
+export const pkPhoneRegex = /^(?:\+92|92|0)?3\d{9}$/;
+export function normalizePkPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  return `+92${digits.slice(-10)}`;
+}
+
 export const checkoutSchema = z.object({
   idempotencyKey: z.uuidv4(),
   customerName: cleanText(100),
