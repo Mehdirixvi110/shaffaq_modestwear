@@ -1,3 +1,5 @@
+import { readOnlinePaymentConfig } from "@/lib/payments/config";
+
 type RuntimeEnvironment = Record<string, string | undefined>;
 
 const LOCAL_PRODUCTION_OVERRIDE = "SHAFFAQ_ALLOW_LOCAL_PRODUCTION_PROFILE";
@@ -75,6 +77,14 @@ export function validateRuntimeConfiguration(env: RuntimeEnvironment = process.e
   const sessionSecret = requireSecret(env, "SESSION_SECRET");
   const csrfSecret = requireSecret(env, "CSRF_SECRET");
   if (sessionSecret === csrfSecret) throw new Error("SESSION_SECRET and CSRF_SECRET must be independent values.");
+
+  // Online payments fail-closed check. Placed BEFORE the allowLocalProduction
+  // early return so both production paths are covered. Reads only presence and the
+  // non-secret SAFEPAY_ENVIRONMENT; never logs any secret value.
+  const online = readOnlinePaymentConfig(env);
+  if (online.status === "MISCONFIGURED") throw new Error("Online payments partially configured: set all SAFEPAY_* variables or none.");
+  if (online.status === "ENABLED" && !["sandbox", "production"].includes(env.SAFEPAY_ENVIRONMENT ?? "")) throw new Error("SAFEPAY_ENVIRONMENT must be 'sandbox' or 'production'.");
+
   if (allowLocalProduction) {
     const hostname = new URL(requireValue(env, "APP_ORIGIN")).hostname;
     if (!["localhost", "127.0.0.1", "[::1]"].includes(hostname)) throw new Error("The local production profile override is restricted to loopback origins.");

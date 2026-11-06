@@ -180,7 +180,7 @@ export const sessions = sqliteTable("sessions", {
 export const orders = sqliteTable("orders", {
   id: text("id").primaryKey(),
   reference: text("reference").notNull().unique(),
-  source: text("source", { enum: ["STOREFRONT_COD", "WHATSAPP_INQUIRY"] }).notNull(),
+  source: text("source", { enum: ["STOREFRONT_COD", "WHATSAPP_INQUIRY", "STOREFRONT_ONLINE"] }).notNull(),
   orderStatus: text("order_status", { enum: ["INQUIRY", "PENDING_CONFIRMATION", "CONFIRMED", "CANCELLED"] }).notNull(),
   fulfillmentStatus: text("fulfillment_status", { enum: ["UNFULFILLED", "PROCESSING", "SHIPPED", "DELIVERED"] }).notNull().default("UNFULFILLED"),
   paymentStatus: text("payment_status", { enum: ["UNPAID", "PAID"] }).notNull().default("UNPAID"),
@@ -447,6 +447,30 @@ export const leads = sqliteTable("leads", {
   index("leads_product_idx").on(table.productId),
   check("leads_status", sql`${table.status} IN ('NEW','CONTACTED','CLOSED')`),
   check("leads_source", sql`${table.source} IN ('PRODUCT_INQUIRY','CONTACT')`),
+]);
+
+export const payments = sqliteTable("payments", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id").notNull().references(() => orders.id, { onDelete: "restrict" }),
+  provider: text("provider", { enum: ["COD", "SAFEPAY"] }).notNull(),
+  status: text("status", { enum: ["PENDING", "PAID", "FAILED", "CANCELLED", "REFUNDED"] }).notNull().default("PENDING"),
+  amount: integer("amount").notNull(),
+  currency: text("currency").notNull().default("PKR"),
+  providerReference: text("provider_reference"),
+  eventId: text("event_id"),
+  lastEvent: text("last_event"),
+  version: integer("version").notNull().default(1),
+  createdAt: integer("created_at").notNull().default(now),
+  updatedAt: integer("updated_at").notNull().default(now),
+}, (table) => [
+  index("payments_order_idx").on(table.orderId),
+  index("payments_status_idx").on(table.status),
+  uniqueIndex("payments_order_provider_uq").on(table.orderId, table.provider),
+  uniqueIndex("payments_event_uq").on(table.eventId),
+  check("payments_amount_nonnegative", sql`${table.amount} >= 0`),
+  check("payments_currency_pkr", sql`${table.currency} = 'PKR'`),
+  check("payments_provider", sql`${table.provider} IN ('COD','SAFEPAY')`),
+  check("payments_status", sql`${table.status} IN ('PENDING','PAID','FAILED','CANCELLED','REFUNDED')`),
 ]);
 
 export const shippingRegions = sqliteTable("shipping_regions", {

@@ -78,7 +78,7 @@ export async function getAdminOrders(input: { q?: string; orderStatus?: string; 
   }
   if (input.orderStatus && ["INQUIRY", "PENDING_CONFIRMATION", "CONFIRMED", "CANCELLED"].includes(input.orderStatus)) { conditions.push("order_status = ?"); parameters.push(input.orderStatus); }
   if (input.fulfillmentStatus && ["UNFULFILLED", "PROCESSING", "SHIPPED", "DELIVERED"].includes(input.fulfillmentStatus)) { conditions.push("fulfillment_status = ?"); parameters.push(input.fulfillmentStatus); }
-  if (input.source && ["STOREFRONT_COD", "WHATSAPP_INQUIRY"].includes(input.source)) { conditions.push("source = ?"); parameters.push(input.source); }
+  if (input.source && ["STOREFRONT_COD", "WHATSAPP_INQUIRY", "STOREFRONT_ONLINE"].includes(input.source)) { conditions.push("source = ?"); parameters.push(input.source); }
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
   return database.prepare(`SELECT id, reference, source, customer_name AS customerName, email, phone, city, order_status AS orderStatus,
     fulfillment_status AS fulfillmentStatus, payment_status AS paymentStatus, subtotal_pkr AS subtotalPkr,
@@ -96,12 +96,13 @@ export async function getAdminOrder(id: string) {
     stock_allocated AS stockAllocated, stock_released AS stockReleased, courier_name AS courierName,
     tracking_number AS trackingNumber, cancellation_reason AS cancellationReason, version, created_at AS createdAt FROM orders WHERE id = ?`).get<Record<string, unknown>>(id);
   if (!order) return null;
-  const [items, history, requests] = await Promise.all([
+  const [items, history, requests, payments] = await Promise.all([
     database.prepare("SELECT id, variant_id AS variantId, product_title AS productTitle, variant_title AS variantTitle, sku, options_json AS optionsJson, unit_price_pkr AS unitPricePkr, quantity, line_total_pkr AS lineTotalPkr FROM order_items WHERE order_id = ? ORDER BY id").all(id),
     database.prepare("SELECT oh.id, oh.event, oh.note, oh.created_at AS createdAt, u.email AS actorEmail FROM order_history oh LEFT JOIN users u ON u.id = oh.actor_user_id WHERE oh.order_id = ? ORDER BY oh.id DESC").all(id),
     database.prepare("SELECT id, kind, status, reason, resolution_note AS resolutionNote, version, created_at AS createdAt, updated_at AS updatedAt FROM return_requests WHERE order_id = ? ORDER BY created_at DESC").all(id),
+    database.prepare("SELECT id, provider, status, amount, currency, provider_reference AS providerReference, last_event AS lastEvent, created_at AS createdAt, updated_at AS updatedAt FROM payments WHERE order_id = ? ORDER BY created_at, id").all(id),
   ]);
-  return { ...order, items, history, requests };
+  return { ...order, items, history, requests, payments };
 }
 
 export async function getAdminCoupons() {

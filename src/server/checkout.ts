@@ -1,16 +1,16 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { database, type DatabaseConnection } from "@/db";
 import { normalizeCouponCode } from "@/lib/coupons";
-import { calculateCommerceTotals, calculateTotals } from "@/lib/pricing";
+import { calculateCommerceTotals, calculateTotals, type CommerceTotals } from "@/lib/pricing";
 import { canonicalHash, hashToken, orderAccessToken } from "@/lib/security";
 import type { CheckoutInput } from "@/lib/validation";
 import { adjustStock } from "./inventory";
 import { getCouponEvaluation } from "./coupons";
 import { ApiError } from "./http";
 import { findCart } from "./cart";
-import { getSettings } from "./store";
+import { getSettings, type StoreSettings } from "./store";
 
-export type CheckoutSource = "STOREFRONT_COD" | "WHATSAPP_INQUIRY";
+export type CheckoutSource = "STOREFRONT_COD" | "WHATSAPP_INQUIRY" | "STOREFRONT_ONLINE";
 export type CheckoutResult = {
   reference: string;
   redirectTo: string;
@@ -21,7 +21,7 @@ export type CheckoutResult = {
   notice: string;
 };
 
-type CheckoutLine = {
+export type CheckoutLine = {
   cartItemId: number;
   productId: number;
   collectionId: number | null;
@@ -37,6 +37,16 @@ type CheckoutLine = {
   options: string;
 };
 
+// Shared, in-transaction context: the SINGLE money/stock authority (C-7). Both
+// checkout() and beginOnlineCheckout() derive totals only through here.
+export type CheckoutContext = {
+  lines: CheckoutLine[];
+  base: ReturnType<typeof calculateTotals>;
+  coupon: Awaited<ReturnType<typeof getCouponEvaluation>>;
+  contactHash: string;
+  totals: CommerceTotals;
+};
+
 function createReference() {
   const month = new Date().toISOString().slice(0, 7).replace("-", "");
   const code = randomBytes(4).toString("hex").slice(0, 6).toUpperCase();
@@ -50,12 +60,115 @@ function normalizePhone(phone: string) {
   return `+92${digits}`;
 }
 
-async function getReplay(connection: DatabaseConnection, subjectHash: string, idempotencyKey: string, requestHash: string) {
+// Shared reference generator so COD (inside its transaction) and online begin
+// (pre-transaction) produce a unique SHQ-* reference through one code path.
+export async function createUniqueReference(connection: DatabaseConnection): Promise<string> {
+  let reference = createReference();
+  while (await connection.prepare("SELECT 1 FROM orders WHERE reference = ?").get(reference)) reference = createReference();
+  return reference;
+}
+
+export async function getReplay(connection: DatabaseConnection, subjectHash: string, idempotencyKey: string, requestHash: string) {
   const existing = await connection.prepare("SELECT order_id AS orderId, request_hash AS requestHash, response_json AS responseJson FROM checkout_requests WHERE subject_hash = ? AND idempotency_key = ?")
     .get<{ orderId: string; requestHash: string; responseJson: string }>(subjectHash, idempotencyKey);
   if (!existing) return null;
   if (existing.requestHash !== requestHash) throw new ApiError(409, "IDEMPOTENCY_CONFLICT", "This submission key was already used for different checkout details.");
   return { result: JSON.parse(existing.responseJson) as CheckoutResult, accessToken: orderAccessToken(existing.orderId) };
+}
+
+// In-transaction coupon-parity reread + line load + stock validation + totals.
+// Extracted verbatim from checkout() so COD/WhatsApp/online share one authority.
+export async function loadCheckoutContext(
+  connection: DatabaseConnection,
+  args: { input: CheckoutInput; settings: StoreSettings; cart: { id: string; couponCode: string | null }; persistedCoupon: string | null },
+): Promise<CheckoutContext> {
+  const { input, settings, cart, persistedCoupon } = args;
+  const currentCart = await connection.prepare(`SELECT coupon_code AS couponCode FROM carts WHERE id = ?${connection.provider === "postgres" ? " FOR UPDATE" : ""}`).get<{ couponCode: string | null }>(cart.id);
+  const currentCoupon = currentCart?.couponCode ? normalizeCouponCode(currentCart.couponCode) : null;
+  if (!currentCart || currentCoupon !== persistedCoupon) throw new ApiError(409, "COUPON_CHANGED", "The cart coupon changed. Reload checkout and try again.");
+  const lines = await connection.prepare(`SELECT ci.id AS cartItemId, ci.quantity, p.id AS productId, p.collection_id AS collectionId,
+    p.title AS productTitle, p.slug AS productSlug, v.id AS variantId, v.title AS variantTitle, v.sku,
+    v.price_pkr AS pricePkr, v.stock, v.version,
+    COALESCE((SELECT GROUP_CONCAT(po.name || ': ' || ov.value, ', ') FROM variant_option_values vov
+      JOIN option_values ov ON ov.id = vov.option_value_id JOIN product_options po ON po.id = ov.option_id
+      WHERE vov.variant_id = v.id), v.title) AS options
+    FROM cart_items ci JOIN variants v ON v.id = ci.variant_id JOIN products p ON p.id = v.product_id
+    WHERE ci.cart_id = ? AND p.status = 'PUBLISHED' AND v.active = 1 ORDER BY ci.id${connection.provider === "postgres" ? " FOR UPDATE OF ci, v" : ""}`).all<CheckoutLine>(cart.id);
+  if (lines.length === 0) throw new ApiError(409, "CART_EMPTY", "Your cart is empty.");
+  for (const line of lines) {
+    if (line.quantity > line.stock) throw new ApiError(409, "STOCK_CHANGED", `${line.productTitle} no longer has the requested quantity.`);
+  }
+  const base = calculateTotals(lines.map((line) => ({ unitPricePkr: line.pricePkr, quantity: line.quantity })), settings.shippingPkr, settings.freeShippingThresholdPkr);
+  const normalizedEmail = input.email.toLowerCase();
+  const contactHash = canonicalHash({ email: normalizedEmail });
+  const coupon = await getCouponEvaluation(connection, persistedCoupon, lines.map((line) => ({ unitPricePkr: line.pricePkr, quantity: line.quantity, productId: line.productId, collectionId: line.collectionId })), base.subtotalPkr, contactHash, Date.now(), true);
+  const totals = calculateCommerceTotals(
+    lines.map((line) => ({ unitPricePkr: line.pricePkr, quantity: line.quantity })),
+    settings.shippingPkr,
+    settings.freeShippingThresholdPkr,
+    coupon?.discountPkr ?? 0,
+    coupon?.freeShipping ?? false,
+    Boolean(settings.taxEnabled),
+    settings.taxRateBps,
+  );
+  return { lines, base, coupon, contactHash, totals };
+}
+
+// The SINGLE order-write authority: INSERT orders (payment_status hardcoded
+// 'UNPAID' — INV-1), order_items (+ CHECKOUT stock allocation when allocated),
+// coupon_redemptions, and the initial order_history row, using the caller-supplied
+// orderId/reference. orderStatus/allocated are pure functions of source.
+export async function persistOrderFromCart(
+  connection: DatabaseConnection,
+  args: { source: CheckoutSource; input: CheckoutInput; context: CheckoutContext; orderId: string; reference: string },
+): Promise<{ orderId: string; reference: string; accessToken: string }> {
+  const { source, input, context, orderId, reference } = args;
+  const { lines, base, coupon, contactHash, totals } = context;
+  const normalizedPhone = normalizePhone(input.phone);
+  const normalizedEmail = input.email.toLowerCase();
+  const accessToken = orderAccessToken(orderId);
+  const orderStatus = source === "WHATSAPP_INQUIRY" ? "INQUIRY" : "PENDING_CONFIRMATION";
+  const allocated = source !== "WHATSAPP_INQUIRY";
+  await connection.prepare(`INSERT INTO orders (
+    id, reference, source, order_status, fulfillment_status, payment_status,
+    customer_name, email, phone, address_line1, address_line2, city, region, postal_code, country, notes,
+    subtotal_pkr, discount_pkr, tax_pkr, shipping_pkr, total_pkr, coupon_code, coupon_type, coupon_value,
+    stock_allocated, stock_released, order_access_hash
+  ) VALUES (?, ?, ?, ?, 'UNFULFILLED', 'UNPAID', ?, ?, ?, ?, ?, ?, ?, ?, 'PK', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`)
+    .run(orderId, reference, source, orderStatus, input.customerName, normalizedEmail, normalizedPhone,
+      input.addressLine1, input.addressLine2 || null, input.city, input.region || null, input.postalCode || null,
+      input.notes || null, totals.subtotalPkr, totals.discountPkr, totals.taxPkr, totals.shippingPkr, totals.totalPkr,
+      coupon?.code ?? null, coupon?.type ?? null, coupon?.value ?? null, allocated ? 1 : 0, hashToken(accessToken));
+
+  const insertItem = connection.prepare(`INSERT INTO order_items
+    (order_id, product_id, variant_id, product_title, product_slug, variant_title, sku, options_json, unit_price_pkr, quantity, line_total_pkr)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  for (const line of lines) {
+    if (allocated) {
+      await adjustStock(connection, {
+        variantId: line.variantId,
+        delta: -line.quantity,
+        expectedVersion: line.version,
+        reason: `Allocated to checkout ${reference}.`,
+        source: "CHECKOUT",
+        sourceKey: `${orderId}:${line.variantId}:CHECKOUT`,
+        orderId,
+      });
+    }
+    await insertItem.run(orderId, line.productId, line.variantId, line.productTitle, line.productSlug, line.variantTitle,
+      line.sku, JSON.stringify({ summary: line.options }), line.pricePkr, line.quantity, line.pricePkr * line.quantity);
+  }
+  if (coupon) {
+    await connection.prepare("INSERT INTO coupon_redemptions (coupon_id, order_id, contact_hash, discount_pkr) VALUES (?, ?, ?, ?)")
+      .run(coupon.id, orderId, contactHash, totals.discountPkr + Math.max(0, base.shippingPkr - totals.shippingPkr));
+  }
+  const historyNote = source === "WHATSAPP_INQUIRY"
+    ? "Inquiry created; stock is not reserved."
+    : source === "STOREFRONT_ONLINE"
+      ? "Online payment order created; stock reserved pending payment."
+      : "Cash-on-delivery order submitted.";
+  await connection.prepare("INSERT INTO order_history (order_id, event, note) VALUES (?, ?, ?)").run(orderId, orderStatus, historyNote);
+  return { orderId, reference, accessToken };
 }
 
 export async function checkout(input: CheckoutInput, source: CheckoutSource, rawCartToken: string | undefined, rawSubjectToken: string | undefined) {
@@ -83,76 +196,12 @@ export async function checkout(input: CheckoutInput, source: CheckoutSource, raw
     if (source === "WHATSAPP_INQUIRY" && !/^\d{10,15}$/.test(whatsappDigits)) {
       throw new ApiError(503, "WHATSAPP_NOT_CONFIGURED", "WhatsApp inquiry checkout is not configured.");
     }
-    const currentCart = await database.prepare(`SELECT coupon_code AS couponCode FROM carts WHERE id = ?${database.provider === "postgres" ? " FOR UPDATE" : ""}`).get<{ couponCode: string | null }>(cart.id);
-    const currentCoupon = currentCart?.couponCode ? normalizeCouponCode(currentCart.couponCode) : null;
-    if (!currentCart || currentCoupon !== persistedCoupon) throw new ApiError(409, "COUPON_CHANGED", "The cart coupon changed. Reload checkout and try again.");
-    const lines = await database.prepare(`SELECT ci.id AS cartItemId, ci.quantity, p.id AS productId, p.collection_id AS collectionId,
-      p.title AS productTitle, p.slug AS productSlug, v.id AS variantId, v.title AS variantTitle, v.sku,
-      v.price_pkr AS pricePkr, v.stock, v.version,
-      COALESCE((SELECT GROUP_CONCAT(po.name || ': ' || ov.value, ', ') FROM variant_option_values vov
-        JOIN option_values ov ON ov.id = vov.option_value_id JOIN product_options po ON po.id = ov.option_id
-        WHERE vov.variant_id = v.id), v.title) AS options
-      FROM cart_items ci JOIN variants v ON v.id = ci.variant_id JOIN products p ON p.id = v.product_id
-      WHERE ci.cart_id = ? AND p.status = 'PUBLISHED' AND v.active = 1 ORDER BY ci.id${database.provider === "postgres" ? " FOR UPDATE OF ci, v" : ""}`).all<CheckoutLine>(cart.id);
-    if (lines.length === 0) throw new ApiError(409, "CART_EMPTY", "Your cart is empty.");
-    for (const line of lines) {
-      if (line.quantity > line.stock) throw new ApiError(409, "STOCK_CHANGED", `${line.productTitle} no longer has the requested quantity.`);
-    }
-    const base = calculateTotals(lines.map((line) => ({ unitPricePkr: line.pricePkr, quantity: line.quantity })), settings.shippingPkr, settings.freeShippingThresholdPkr);
-    const normalizedPhone = normalizePhone(input.phone);
-    const normalizedEmail = input.email.toLowerCase();
-    const contactHash = canonicalHash({ email: normalizedEmail });
-    const coupon = await getCouponEvaluation(database, persistedCoupon, lines.map((line) => ({ unitPricePkr: line.pricePkr, quantity: line.quantity, productId: line.productId, collectionId: line.collectionId })), base.subtotalPkr, contactHash, Date.now(), true);
-    const totals = calculateCommerceTotals(
-      lines.map((line) => ({ unitPricePkr: line.pricePkr, quantity: line.quantity })),
-      settings.shippingPkr,
-      settings.freeShippingThresholdPkr,
-      coupon?.discountPkr ?? 0,
-      coupon?.freeShipping ?? false,
-      Boolean(settings.taxEnabled),
-      settings.taxRateBps,
-    );
+    const context = await loadCheckoutContext(database, { input, settings, cart, persistedCoupon });
+    const { coupon, totals, lines } = context;
     const orderId = randomUUID();
-    let reference = createReference();
-    while (await database.prepare("SELECT 1 FROM orders WHERE reference = ?").get(reference)) reference = createReference();
-    const accessToken = orderAccessToken(orderId);
-    const orderStatus = source === "STOREFRONT_COD" ? "PENDING_CONFIRMATION" : "INQUIRY";
-    const allocated = source === "STOREFRONT_COD";
-    await database.prepare(`INSERT INTO orders (
-      id, reference, source, order_status, fulfillment_status, payment_status,
-      customer_name, email, phone, address_line1, address_line2, city, region, postal_code, country, notes,
-      subtotal_pkr, discount_pkr, tax_pkr, shipping_pkr, total_pkr, coupon_code, coupon_type, coupon_value,
-      stock_allocated, stock_released, order_access_hash
-    ) VALUES (?, ?, ?, ?, 'UNFULFILLED', 'UNPAID', ?, ?, ?, ?, ?, ?, ?, ?, 'PK', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`)
-      .run(orderId, reference, source, orderStatus, input.customerName, normalizedEmail, normalizedPhone,
-        input.addressLine1, input.addressLine2 || null, input.city, input.region || null, input.postalCode || null,
-        input.notes || null, totals.subtotalPkr, totals.discountPkr, totals.taxPkr, totals.shippingPkr, totals.totalPkr,
-        coupon?.code ?? null, coupon?.type ?? null, coupon?.value ?? null, allocated ? 1 : 0, hashToken(accessToken));
-
-    const insertItem = database.prepare(`INSERT INTO order_items
-      (order_id, product_id, variant_id, product_title, product_slug, variant_title, sku, options_json, unit_price_pkr, quantity, line_total_pkr)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-    for (const line of lines) {
-      if (allocated) {
-        await adjustStock(database, {
-          variantId: line.variantId,
-          delta: -line.quantity,
-          expectedVersion: line.version,
-          reason: `Allocated to checkout ${reference}.`,
-          source: "CHECKOUT",
-          sourceKey: `${orderId}:${line.variantId}:CHECKOUT`,
-          orderId,
-        });
-      }
-      await insertItem.run(orderId, line.productId, line.variantId, line.productTitle, line.productSlug, line.variantTitle,
-        line.sku, JSON.stringify({ summary: line.options }), line.pricePkr, line.quantity, line.pricePkr * line.quantity);
-    }
-    if (coupon) {
-      await database.prepare("INSERT INTO coupon_redemptions (coupon_id, order_id, contact_hash, discount_pkr) VALUES (?, ?, ?, ?)")
-        .run(coupon.id, orderId, contactHash, totals.discountPkr + Math.max(0, base.shippingPkr - totals.shippingPkr));
-    }
-    await database.prepare("INSERT INTO order_history (order_id, event, note) VALUES (?, ?, ?)")
-      .run(orderId, orderStatus, source === "WHATSAPP_INQUIRY" ? "Inquiry created; stock is not reserved." : "Cash-on-delivery order submitted.");
+    const reference = await createUniqueReference(database);
+    const { accessToken } = await persistOrderFromCart(database, { source, input, context, orderId, reference });
+    const orderStatus = source === "WHATSAPP_INQUIRY" ? "INQUIRY" : "PENDING_CONFIRMATION";
 
     const notice = source === "WHATSAPP_INQUIRY"
       ? "WhatsApp inquiry only — this does not confirm your order or payment. SHAFFAQ will confirm availability and next steps."
