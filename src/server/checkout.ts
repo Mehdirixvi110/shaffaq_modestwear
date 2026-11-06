@@ -10,7 +10,7 @@ import { ApiError } from "./http";
 import { findCart } from "./cart";
 import { getSettings, type StoreSettings } from "./store";
 
-export type CheckoutSource = "STOREFRONT_COD" | "WHATSAPP_INQUIRY" | "STOREFRONT_ONLINE";
+export type CheckoutSource = "STOREFRONT_COD" | "WHATSAPP_INQUIRY" | "STOREFRONT_ONLINE" | "STOREFRONT_MANUAL";
 export type CheckoutResult = {
   reference: string;
   redirectTo: string;
@@ -166,7 +166,9 @@ export async function persistOrderFromCart(
     ? "Inquiry created; stock is not reserved."
     : source === "STOREFRONT_ONLINE"
       ? "Online payment order created; stock reserved pending payment."
-      : "Cash-on-delivery order submitted.";
+      : source === "STOREFRONT_MANUAL"
+        ? "Bank-transfer order created; stock reserved pending payment verification."
+        : "Cash-on-delivery order submitted.";
   await connection.prepare("INSERT INTO order_history (order_id, event, note) VALUES (?, ?, ?)").run(orderId, orderStatus, historyNote);
   return { orderId, reference, accessToken };
 }

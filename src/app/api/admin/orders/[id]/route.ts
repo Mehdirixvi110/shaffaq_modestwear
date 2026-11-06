@@ -3,8 +3,9 @@ import { z } from "zod";
 import { authorizeAdminMutation, withAdminAudit } from "@/server/admin";
 import { apiErrorResponse, ApiError } from "@/server/http";
 import { adjustStock } from "@/server/inventory";
+import { markManualPaymentPaid } from "@/server/payments/manual";
 
-const schema = z.object({ action: z.enum(["CONFIRM", "PROCESS", "SHIP", "DELIVER", "CANCEL", "MARK_COD_COLLECTED"]), reason: z.string().trim().max(500).nullable(), courierName: z.string().trim().max(120).nullable(), trackingNumber: z.string().trim().max(120).nullable(), expectedVersion: z.number().int().positive() }).strict();
+const schema = z.object({ action: z.enum(["CONFIRM", "PROCESS", "SHIP", "DELIVER", "CANCEL", "MARK_COD_COLLECTED", "MARK_MANUAL_PAID", "REJECT_MANUAL_PROOF"]), reason: z.string().trim().max(500).nullable(), courierName: z.string().trim().max(120).nullable(), trackingNumber: z.string().trim().max(120).nullable(), expectedVersion: z.number().int().positive() }).strict();
 type OrderRow = { id: string; source: string; orderStatus: string; fulfillmentStatus: string; paymentStatus: string; stockAllocated: number; stockReleased: number; version: number };
 type ItemRow = { variantId: number | null; quantity: number; productTitle: string };
 
@@ -51,9 +52,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
           released = true;
         }
         orderStatus = "CANCELLED"; fulfillmentStatus = "UNFULFILLED"; cancellationReason = input.reason;
-      } else {
+      } else if (input.action === "MARK_COD_COLLECTED") {
         if (orderStatus !== "CONFIRMED" || paymentStatus !== "UNPAID" || order.source !== "STOREFRONT_COD") throw new ApiError(409, "ILLEGAL_TRANSITION", "COD collection cannot be recorded in the current state.");
         paymentStatus = "PAID"; note = input.reason ?? "Administrator recorded cash collection. This is an internal ledger event.";
+      } else if (input.action === "MARK_MANUAL_PAID") {
+        if (order.source !== "STOREFRONT_MANUAL" || paymentStatus !== "UNPAID" || orderStatus === "CANCELLED") throw new ApiError(409, "ILLEGAL_TRANSITION", "Bank-transfer payment cannot be verified in the current state.");
+        const changed = await markManualPaymentPaid(connection, id);
+        if (changed !== 1) throw new ApiError(409, "ILLEGAL_TRANSITION", "No pending bank-transfer payment to verify.");
+        paymentStatus = "PAID"; note = input.reason ?? "Administrator verified bank-transfer payment.";
+      } else {
+        if (order.source !== "STOREFRONT_MANUAL" || paymentStatus !== "UNPAID") throw new ApiError(409, "ILLEGAL_TRANSITION", "Bank-transfer proof cannot be rejected in the current state.");
+        if (!input.reason || input.reason.length < 3) throw new ApiError(409, "ILLEGAL_TRANSITION", "A reason is required to reject a proof.");
+        await connection.prepare("UPDATE payments SET last_event = 'PROOF_REJECTED', updated_at = unixepoch() * 1000 WHERE order_id = ? AND provider = 'MANUAL' AND status = 'PENDING'").run(id);
+        note = input.reason; // history-only: order and payment stay UNPAID / PENDING for a re-upload
       }
       const update = await connection.prepare(`UPDATE orders SET order_status = ?, fulfillment_status = ?, payment_status = ?, stock_allocated = ?, stock_released = ?,
         cancellation_reason = COALESCE(?, cancellation_reason), version = version + 1, updated_at = unixepoch() * 1000 WHERE id = ? AND version = ?`)

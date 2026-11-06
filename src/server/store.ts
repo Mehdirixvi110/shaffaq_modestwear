@@ -29,6 +29,14 @@ export type StoreSettings = {
   analyticsIdentifier: string | null;
   maintenanceMode: number;
   maintenanceMessage: string | null;
+  manualPaymentEnabled: number;
+  manualBankName: string | null;
+  manualAccountTitle: string | null;
+  manualAccountNumber: string | null;
+  manualIban: string | null;
+  manualEasypaisaNumber: string | null;
+  manualJazzcashNumber: string | null;
+  manualPaymentInstructions: string | null;
   version: number;
 };
 
@@ -59,7 +67,11 @@ export async function getSettings() {
     returns_policy_url AS returnsPolicyUrl, exchanges_policy_url AS exchangesPolicyUrl,
     instagram_url AS instagramUrl, facebook_url AS facebookUrl, tiktok_url AS tiktokUrl,
     seo_title AS seoTitle, seo_description AS seoDescription, analytics_identifier AS analyticsIdentifier,
-    maintenance_mode AS maintenanceMode, maintenance_message AS maintenanceMessage, version
+    maintenance_mode AS maintenanceMode, maintenance_message AS maintenanceMessage,
+    manual_payment_enabled AS manualPaymentEnabled, manual_bank_name AS manualBankName,
+    manual_account_title AS manualAccountTitle, manual_account_number AS manualAccountNumber,
+    manual_iban AS manualIban, manual_easypaisa_number AS manualEasypaisaNumber,
+    manual_jazzcash_number AS manualJazzcashNumber, manual_payment_instructions AS manualPaymentInstructions, version
     FROM settings WHERE id = 1`).get<StoreSettings>();
   if (!row) throw new Error("Store has not been seeded. Run the provider-specific seed command.");
   return row;

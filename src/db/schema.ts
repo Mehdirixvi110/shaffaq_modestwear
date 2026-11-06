@@ -33,6 +33,14 @@ export const settings = sqliteTable("settings", {
   analyticsIdentifier: text("analytics_identifier"),
   maintenanceMode: integer("maintenance_mode", { mode: "boolean" }).notNull().default(false),
   maintenanceMessage: text("maintenance_message"),
+  manualPaymentEnabled: integer("manual_payment_enabled", { mode: "boolean" }).notNull().default(false),
+  manualBankName: text("manual_bank_name"),
+  manualAccountTitle: text("manual_account_title"),
+  manualAccountNumber: text("manual_account_number"),
+  manualIban: text("manual_iban"),
+  manualEasypaisaNumber: text("manual_easypaisa_number"),
+  manualJazzcashNumber: text("manual_jazzcash_number"),
+  manualPaymentInstructions: text("manual_payment_instructions"),
   version: integer("version").notNull().default(1),
   updatedAt: integer("updated_at").notNull().default(now),
 }, (table) => [
@@ -180,7 +188,7 @@ export const sessions = sqliteTable("sessions", {
 export const orders = sqliteTable("orders", {
   id: text("id").primaryKey(),
   reference: text("reference").notNull().unique(),
-  source: text("source", { enum: ["STOREFRONT_COD", "WHATSAPP_INQUIRY", "STOREFRONT_ONLINE"] }).notNull(),
+  source: text("source", { enum: ["STOREFRONT_COD", "WHATSAPP_INQUIRY", "STOREFRONT_ONLINE", "STOREFRONT_MANUAL"] }).notNull(),
   orderStatus: text("order_status", { enum: ["INQUIRY", "PENDING_CONFIRMATION", "CONFIRMED", "CANCELLED"] }).notNull(),
   fulfillmentStatus: text("fulfillment_status", { enum: ["UNFULFILLED", "PROCESSING", "SHIPPED", "DELIVERED"] }).notNull().default("UNFULFILLED"),
   paymentStatus: text("payment_status", { enum: ["UNPAID", "PAID"] }).notNull().default("UNPAID"),
@@ -452,13 +460,14 @@ export const leads = sqliteTable("leads", {
 export const payments = sqliteTable("payments", {
   id: text("id").primaryKey(),
   orderId: text("order_id").notNull().references(() => orders.id, { onDelete: "restrict" }),
-  provider: text("provider", { enum: ["COD", "SAFEPAY"] }).notNull(),
+  provider: text("provider", { enum: ["COD", "SAFEPAY", "MANUAL"] }).notNull(),
   status: text("status", { enum: ["PENDING", "PAID", "FAILED", "CANCELLED", "REFUNDED"] }).notNull().default("PENDING"),
   amount: integer("amount").notNull(),
   currency: text("currency").notNull().default("PKR"),
   providerReference: text("provider_reference"),
   eventId: text("event_id"),
   lastEvent: text("last_event"),
+  accountSnapshot: text("account_snapshot"),
   version: integer("version").notNull().default(1),
   createdAt: integer("created_at").notNull().default(now),
   updatedAt: integer("updated_at").notNull().default(now),
@@ -469,9 +478,16 @@ export const payments = sqliteTable("payments", {
   uniqueIndex("payments_event_uq").on(table.eventId),
   check("payments_amount_nonnegative", sql`${table.amount} >= 0`),
   check("payments_currency_pkr", sql`${table.currency} = 'PKR'`),
-  check("payments_provider", sql`${table.provider} IN ('COD','SAFEPAY')`),
+  check("payments_provider", sql`${table.provider} IN ('COD','SAFEPAY','MANUAL')`),
   check("payments_status", sql`${table.status} IN ('PENDING','PAID','FAILED','CANCELLED','REFUNDED')`),
 ]);
+
+export const paymentProofs = sqliteTable("payment_proofs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  orderId: text("order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  mediaFileId: integer("media_file_id").notNull().references(() => mediaFiles.id, { onDelete: "restrict" }),
+  createdAt: integer("created_at").notNull().default(now),
+}, (table) => [index("payment_proofs_order_idx").on(table.orderId)]);
 
 export const shippingRegions = sqliteTable("shipping_regions", {
   id: integer("id").primaryKey({ autoIncrement: true }),

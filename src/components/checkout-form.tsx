@@ -8,14 +8,14 @@ import { csrfFetch, responseMessage } from "./csrf-fetch";
 
 type CheckoutResult = { reference: string; redirectTo: string; whatsappUrl: string | null; notice: string; totalPkr: number };
 
-export function CheckoutForm({ cart, codEnabled, whatsappEnabled, onlineEnabled }: { cart: CartState; codEnabled: boolean; whatsappEnabled: boolean; onlineEnabled: boolean }) {
+export function CheckoutForm({ cart, codEnabled, whatsappEnabled, onlineEnabled, manualEnabled }: { cart: CartState; codEnabled: boolean; whatsappEnabled: boolean; onlineEnabled: boolean; manualEnabled: boolean }) {
   const [key, setKey] = useState(() => crypto.randomUUID());
-  const [busy, setBusy] = useState<"cod" | "whatsapp" | "online" | null>(null);
+  const [busy, setBusy] = useState<"cod" | "whatsapp" | "online" | "manual" | null>(null);
   const [message, setMessage] = useState("");
   const [result, setResult] = useState<CheckoutResult | null>(null);
   const refreshKey = () => setKey(crypto.randomUUID());
 
-  async function submit(event: React.FormEvent<HTMLFormElement>, channel: "cod" | "whatsapp" | "online") {
+  async function submit(event: React.FormEvent<HTMLFormElement>, channel: "cod" | "whatsapp" | "online" | "manual") {
     event.preventDefault();
     setBusy(channel);
     setMessage("");
@@ -27,7 +27,7 @@ export function CheckoutForm({ cart, codEnabled, whatsappEnabled, onlineEnabled 
       region: form.get("region"), postalCode: form.get("postalCode"), country: "PK", notes: form.get("notes"), couponCode: cart.couponCode,
     };
     try {
-      const endpoint = channel === "whatsapp" ? "/api/checkout/whatsapp" : channel === "online" ? "/api/checkout/online" : "/api/checkout/cod";
+      const endpoint = channel === "whatsapp" ? "/api/checkout/whatsapp" : channel === "online" ? "/api/checkout/online" : channel === "manual" ? "/api/checkout/manual" : "/api/checkout/cod";
       const response = await csrfFetch(endpoint, { method: "POST", body: JSON.stringify(payload) });
       if (!response.ok) throw new Error(await responseMessage(response));
       const data = await response.json() as CheckoutResult;
@@ -53,6 +53,7 @@ export function CheckoutForm({ cart, codEnabled, whatsappEnabled, onlineEnabled 
         {cart.couponError ? <p className="form-status" role="alert">{cart.couponError} Return to your bag to remove or replace the coupon.</p> : null}
         {codEnabled ? <button className="button button--dark button--full" disabled={busy !== null || Boolean(cart.couponError)} type="submit">{busy === "cod" ? "Submitting…" : "Place cash-on-delivery order"}</button> : <p className="form-status">Cash on delivery is disabled.</p>}
         {onlineEnabled ? <button className="button button--outline button--full" disabled={busy !== null || Boolean(cart.couponError)} type="button" onClick={(event) => submit({ ...event, preventDefault: () => event.preventDefault(), currentTarget: event.currentTarget.form! } as unknown as React.FormEvent<HTMLFormElement>, "online")}>{busy === "online" ? "Starting secure payment…" : "Pay online"}</button> : null}
+        {manualEnabled ? <button className="button button--outline button--full" disabled={busy !== null || Boolean(cart.couponError)} type="button" onClick={(event) => submit({ ...event, preventDefault: () => event.preventDefault(), currentTarget: event.currentTarget.form! } as unknown as React.FormEvent<HTMLFormElement>, "manual")}>{busy === "manual" ? "Placing bank-transfer order…" : "Place bank-transfer order"}</button> : null}
         {whatsappEnabled ? <button className="button button--outline button--full" disabled={busy !== null || Boolean(cart.couponError)} type="button" onClick={(event) => submit({ ...event, preventDefault: () => event.preventDefault(), currentTarget: event.currentTarget.form! } as unknown as React.FormEvent<HTMLFormElement>, "whatsapp")}>{busy === "whatsapp" ? "Creating inquiry…" : "Create WhatsApp inquiry"}</button> : null}
         <p className="whatsapp-notice">A WhatsApp inquiry creates a reference first. It does not confirm an order, reserve stock, or confirm payment.</p>
         {message ? <p className="form-status" role="alert">{message}</p> : null}
