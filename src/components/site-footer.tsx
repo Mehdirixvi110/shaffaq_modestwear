@@ -24,7 +24,7 @@ export function SiteFooter({ settings }: { settings: StoreSettings }) {
         {groups(settings).map((group) => (
           <details className="footer-group" key={group.title} open>
             <summary>{group.title}</summary>
-            <ul>{group.links.map(([label, href]) => <li key={href}><Link href={href}>{label}</Link></li>)}</ul>
+            <ul>{group.links.map(([label, href]) => <li key={`${group.title}-${label}`}><Link href={href}>{label}</Link></li>)}</ul>
           </details>
         ))}
       </div>

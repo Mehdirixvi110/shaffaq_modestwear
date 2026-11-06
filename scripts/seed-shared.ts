@@ -56,11 +56,13 @@ export async function seedDatabase(connection: DatabaseConnection, options: { en
       'SHAFFAQ — SAMPLE EDIT', 'Elegance, in Every Layer.',
       'A preview of the SHAFFAQ catalogue experience.', 'Explore the edit',
       '/collections/new-edit', '/media/hero-desktop.jpeg', '/media/hero-mobile.jpg',
-      '/brand/logo.jpg', 'SHAFFAQ', '/brand/logo.jpg', 'SHAFFAQ Abayas & Scarves', NULL, NULL,
+      NULL, 'SHAFFAQ', NULL, 'SHAFFAQ Abayas & Scarves', NULL, NULL,
       250, 6000, 1, '923233367659', 'admin@shaffaqmodestwear.com', '923233367659')`).run();
 
-    await connection.prepare(`UPDATE settings SET header_logo_path=COALESCE(header_logo_path,'/brand/logo.jpg'),
-      footer_logo_path=COALESCE(footer_logo_path,'/brand/logo.jpg'), header_logo_alt=COALESCE(header_logo_alt,'SHAFFAQ'),
+    await connection.prepare(`UPDATE settings SET
+      header_logo_path = CASE WHEN header_logo_path = '/brand/logo.jpg' THEN NULL ELSE header_logo_path END,
+      footer_logo_path = CASE WHEN footer_logo_path = '/brand/logo.jpg' THEN NULL ELSE footer_logo_path END,
+      header_logo_alt=COALESCE(header_logo_alt,'SHAFFAQ'),
       footer_logo_alt=COALESCE(footer_logo_alt,'SHAFFAQ Abayas & Scarves') WHERE id=1`).run();
 
     if (options.enforceBusinessSettings) {
