@@ -88,9 +88,30 @@ export async function getManualPaymentView(orderId: string): Promise<ManualPayme
 // Link an uploaded, already-stored proof image to the order and record the event.
 // Runs inside the caller's transaction. NEVER touches payment_status — uploading a
 // proof keeps the order PENDING for admin review.
-export async function recordPaymentProof(connection: DatabaseConnection, args: { orderId: string; mediaFileId: number }): Promise<void> {
-  await connection.prepare("INSERT INTO payment_proofs (order_id, media_file_id) VALUES (?, ?)").run(args.orderId, args.mediaFileId);
+export async function recordPaymentProof(connection: DatabaseConnection, args: { orderId: string; mediaFileId: number }): Promise<number> {
+  const inserted = await connection.prepare("INSERT INTO payment_proofs (order_id, media_file_id) VALUES (?, ?)").run(args.orderId, args.mediaFileId);
   await connection.prepare("INSERT INTO order_history (order_id, event, note) VALUES (?, ?, ?)").run(args.orderId, "PAYMENT_PROOF_UPLOADED", "Customer uploaded a bank-transfer payment proof; awaiting admin verification.");
+  return Number(inserted.lastInsertRowid);
+}
+
+export type ProofForViewer = { storageKey: string; mime: string; sha256: string };
+
+// Access-gated lookup backing GET /orders/[reference]/payment-proof/[id]. Payment
+// proofs are customer financial data, so the media descriptor is returned ONLY to an
+// authenticated admin OR the order owner proven by the order-access capability token
+// (its hash must equal the order's stored order_access_hash — the exact check
+// getOrderForCustomer uses). An unknown proof, a reference that does not own the
+// proof, or any unauthorized caller yields null so the route 404s without signalling
+// existence (no IDOR), matching the sibling upload route's convention.
+export async function getProofForViewer(reference: string, proofId: number, viewer: { isAdmin: boolean; rawAccessToken: string | undefined }): Promise<ProofForViewer | null> {
+  if (!Number.isInteger(proofId) || proofId <= 0) return null;
+  const row = await database.prepare(`SELECT mf.storage_key AS storageKey, mf.mime, mf.sha256, o.order_access_hash AS orderAccessHash
+    FROM payment_proofs pp JOIN media_files mf ON mf.id = pp.media_file_id JOIN orders o ON o.id = pp.order_id
+    WHERE pp.id = ? AND o.reference = ?`).get<{ storageKey: string; mime: string; sha256: string; orderAccessHash: string }>(proofId, reference);
+  if (!row) return null;
+  const isOwner = Boolean(viewer.rawAccessToken) && hashToken(viewer.rawAccessToken!) === row.orderAccessHash;
+  if (!viewer.isAdmin && !isOwner) return null;
+  return { storageKey: row.storageKey, mime: row.mime, sha256: row.sha256 };
 }
 
 // Write-once guarded PENDING -> PAID transition for the MANUAL payment row. Returns

@@ -30,6 +30,14 @@ function trimmed(value: string | null | undefined): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+// Shared eligibility predicate for the three guarded MANUAL proof actions: the
+// customer proof upload, admin MARK_MANUAL_PAID, and admin REJECT_MANUAL_PROOF. A
+// proof action is allowed only for a storefront bank-transfer order that is still
+// UNPAID and not CANCELLED, so a cancelled order rejects all three by construction.
+export function manualProofActionable(order: { source: string; paymentStatus: string; orderStatus: string }): boolean {
+  return order.source === "STOREFRONT_MANUAL" && order.paymentStatus === "UNPAID" && order.orderStatus !== "CANCELLED";
+}
+
 // MANUAL is offered ONLY when enabled AND at least one payable-account identifier
 // is configured (title/instructions alone are not enough to receive money).
 export function manualPaymentAvailable(settings: ManualPaymentSettings): boolean {

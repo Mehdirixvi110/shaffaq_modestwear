@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export async function GET(_: Request, context: { params: Promise<{ filename: string }> }) {
   const { filename } = await context.params;
   if (!/^[0-9a-f-]{36}\.(?:jpg|png|webp)$/.test(filename)) return new NextResponse(null, { status: 404 });
-  const media = await database.prepare("SELECT storage_key AS storageKey, mime, sha256 FROM media_files WHERE storage_key = ?").get<{ storageKey: string; mime: string; sha256: string }>(filename);
+  const media = await database.prepare("SELECT storage_key AS storageKey, mime, sha256 FROM media_files WHERE storage_key = ? AND NOT EXISTS (SELECT 1 FROM payment_proofs pp WHERE pp.media_file_id = media_files.id)").get<{ storageKey: string; mime: string; sha256: string }>(filename);
   if (!media) return new NextResponse(null, { status: 404 });
   try {
     const bytes = await readLocalMedia(media.storageKey);

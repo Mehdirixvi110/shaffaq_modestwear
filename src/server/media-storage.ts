@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import { relative, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { mediaProvider } from "@/config/runtime";
 
@@ -84,4 +84,47 @@ export async function readLocalMedia(storageKey: string) {
   if (mediaProvider() !== "local") return null;
   const { path } = safeLocalPath(storageKey);
   return readFile(/* turbopackIgnore: true */ path);
+}
+
+// Payment-proof screenshots are customer financial data and must NEVER be reachable
+// through the public /uploads route. They are stored under a private `proofs/` key
+// prefix (local: the .data/media/proofs subdirectory, which the single-segment
+// /uploads/[filename] route cannot address; Supabase: an object with NO public URL)
+// and their public_path is a non-routable marker. Bytes are served only through the
+// access-gated proof route via readProofMedia. The Sharp re-encode + caps stay with
+// the caller; this only changes where the object lives.
+export async function storeProofImage(bytes: Buffer, extension: "jpg" | "png" | "webp", mime: string) {
+  const provider = mediaProvider();
+  const key = `proofs/${randomUUID()}.${extension}`;
+  if (provider === "local") {
+    const { path } = safeLocalPath(key);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, bytes, { flag: "wx" });
+    return { storageKey: key, publicPath: `/private/${key}`, provider } satisfies StoredMedia;
+  }
+  const client = storageClient();
+  const bucket = storageBucket();
+  const { error } = await client.storage.from(bucket).upload(key, bytes, {
+    cacheControl: "31536000",
+    contentType: mime,
+    upsert: false,
+  });
+  if (error) throw new Error(`Supabase Storage upload failed (${error.name}).`);
+  return { storageKey: key, publicPath: `/private/${key}`, provider } satisfies StoredMedia;
+}
+
+// Read a stored proof's bytes for the gated route. Returns null when the object is
+// missing (local ENOENT or a Supabase download error) so the caller can 404.
+export async function readProofMedia(storageKey: string) {
+  if (mediaProvider() === "local") {
+    const { path } = safeLocalPath(storageKey);
+    try {
+      return await readFile(/* turbopackIgnore: true */ path);
+    } catch {
+      return null;
+    }
+  }
+  const { data, error } = await storageClient().storage.from(storageBucket()).download(storageKey);
+  if (error || !data) return null;
+  return Buffer.from(await data.arrayBuffer());
 }
