@@ -1,9 +1,16 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdirSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import Database from "better-sqlite3";
-import postgres, { type Sql } from "postgres";
+import type { Sql } from "postgres";
 import { databaseProvider } from "../config/runtime";
+
+// postgres is loaded lazily (only on the Postgres path) so the SQLite runtime never
+// pulls the driver into its trace. createRequire keeps the load a synchronous require
+// through a variable, so createDatabaseConnection stays synchronous and the bundler
+// does not statically trace "postgres" on the SQLite path.
+const nodeRequire = createRequire(import.meta.url);
 
 export type RunResult = {
   changes: number;
@@ -127,6 +134,7 @@ function postgresUrlWithSchema(rawUrl: string, schema: string | undefined) {
 }
 
 function createPostgresClient(url: string) {
+  const postgres = nodeRequire("postgres") as typeof import("postgres");
   return postgres(postgresUrlWithSchema(url, process.env.DATABASE_SCHEMA), {
     ssl: "require",
     prepare: false,

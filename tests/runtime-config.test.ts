@@ -47,3 +47,40 @@ describe("production runtime configuration", () => {
     expect(() => validateRuntimeConfiguration({ ...valid, VERCEL: "1", APP_ORIGIN: "http://localhost:3000", NEXT_PUBLIC_APP_ORIGIN: "http://localhost:3000", SHAFFAQ_ALLOW_LOCAL_PRODUCTION_PROFILE: "1" })).toThrow("HTTPS");
   });
 });
+
+describe("self-hosted SQLite production profile (SELF_HOSTED_SQLITE)", () => {
+  const selfHosted = {
+    ...valid,
+    DATABASE_PROVIDER: "sqlite",
+    MEDIA_PROVIDER: "local",
+    SELF_HOSTED_SQLITE: "1",
+  };
+
+  it("still rejects sqlite in production when the flag is off", () => {
+    expect(() => validateRuntimeConfiguration({ ...selfHosted, SELF_HOSTED_SQLITE: "0" })).toThrow("DATABASE_PROVIDER");
+  });
+
+  it("permits sqlite + local media behind the flag with HTTPS and strong distinct secrets", () => {
+    expect(() => validateRuntimeConfiguration(selfHosted)).not.toThrow();
+  });
+
+  it("still requires an exact HTTPS origin, rejecting http even on loopback", () => {
+    expect(() => validateRuntimeConfiguration({ ...selfHosted, APP_ORIGIN: "http://127.0.0.1:3000", NEXT_PUBLIC_APP_ORIGIN: "http://127.0.0.1:3000" })).toThrow("HTTPS");
+  });
+
+  it("still requires a >=32-byte SESSION_SECRET", () => {
+    expect(() => validateRuntimeConfiguration({ ...selfHosted, SESSION_SECRET: "short" })).toThrow("32 bytes");
+  });
+
+  it("still requires independent SESSION_SECRET and CSRF_SECRET", () => {
+    expect(() => validateRuntimeConfiguration({ ...selfHosted, CSRF_SECRET: selfHosted.SESSION_SECRET })).toThrow("independent");
+  });
+
+  it("permits only local media, rejecting supabase even behind the flag", () => {
+    expect(() => validateRuntimeConfiguration({ ...selfHosted, MEDIA_PROVIDER: "supabase" })).toThrow("MEDIA_PROVIDER");
+  });
+
+  it("ignores the flag on Vercel and still forces postgres", () => {
+    expect(() => validateRuntimeConfiguration({ ...selfHosted, VERCEL: "1" })).toThrow("DATABASE_PROVIDER");
+  });
+});

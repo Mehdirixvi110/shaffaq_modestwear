@@ -72,7 +72,14 @@ export function validateRuntimeConfiguration(env: RuntimeEnvironment = process.e
   if (!production) return;
 
   const allowLocalProduction = env[LOCAL_PRODUCTION_OVERRIDE] === "1" && env.VERCEL !== "1";
-  const allowHttpLoopback = env.VERCEL !== "1";
+  // SELF_HOSTED_SQLITE is the production opt-in for a REAL non-loopback https host
+  // (e.g. cPanel Node) to run the sqlite + local-media profile. Distinct from the
+  // loopback override above: it does NOT relax the origin to http, so it drops the
+  // http-loopback allowance and still enforces exact-HTTPS origin plus present,
+  // >=32-byte, distinct SESSION_SECRET/CSRF_SECRET and the payment fail-closed checks.
+  // Self-excludes on Vercel.
+  const selfHostedSqlite = env.SELF_HOSTED_SQLITE === "1" && env.VERCEL !== "1";
+  const allowHttpLoopback = env.VERCEL !== "1" && !selfHostedSqlite;
   requireOrigin(env, allowHttpLoopback);
   const sessionSecret = requireSecret(env, "SESSION_SECRET");
   const csrfSecret = requireSecret(env, "CSRF_SECRET");
@@ -88,6 +95,15 @@ export function validateRuntimeConfiguration(env: RuntimeEnvironment = process.e
   if (allowLocalProduction) {
     const hostname = new URL(requireValue(env, "APP_ORIGIN")).hostname;
     if (!["localhost", "127.0.0.1", "[::1]"].includes(hostname)) throw new Error("The local production profile override is restricted to loopback origins.");
+    return;
+  }
+
+  // Self-hosted production opt-in: permit ONLY sqlite + local media, and nothing else.
+  // The exact-HTTPS origin, strong distinct secrets, and payment fail-closed checks
+  // above have already run, so this only widens the provider pair, not the other guards.
+  if (selfHostedSqlite) {
+    if (env.DATABASE_PROVIDER !== "sqlite") throw new Error("DATABASE_PROVIDER must be sqlite when SELF_HOSTED_SQLITE=1.");
+    if (env.MEDIA_PROVIDER !== "local") throw new Error("MEDIA_PROVIDER must be local when SELF_HOSTED_SQLITE=1.");
     return;
   }
 

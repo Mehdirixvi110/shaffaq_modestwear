@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { mediaProvider } from "@/config/runtime";
 
 export type StoredMedia = {
@@ -24,11 +24,15 @@ function safeLocalPath(key: string) {
   return { root, path };
 }
 
-function storageClient() {
+// Loaded lazily (only on the Supabase path) via a dynamic import so the local
+// filesystem profile never pulls @supabase/supabase-js into its trace. The media
+// functions below are already async, so awaiting the client here is the minimal change.
+async function storageClient() {
   if (supabase) return supabase;
   const url = process.env.SUPABASE_URL;
   const secret = process.env.SUPABASE_SECRET_KEY;
   if (!url || !secret) throw new Error("SUPABASE_URL and SUPABASE_SECRET_KEY are required for Supabase media.");
+  const { createClient } = await import("@supabase/supabase-js");
   supabase = createClient(url, secret, {
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     global: { headers: { "X-Client-Info": "shaffaq-server-storage" } },
@@ -53,7 +57,7 @@ export async function storeImage(bytes: Buffer, extension: "jpg" | "png" | "webp
   }
 
   const key = `${keyPrefix}/${randomUUID()}.${extension}`;
-  const client = storageClient();
+  const client = await storageClient();
   const bucket = storageBucket();
   const { error } = await client.storage.from(bucket).upload(key, bytes, {
     cacheControl: "31536000",
@@ -76,7 +80,8 @@ export async function removeStoredMedia(media: StoredMedia) {
     await unlink(path).catch(() => undefined);
     return;
   }
-  const { error } = await storageClient().storage.from(storageBucket()).remove([media.storageKey]);
+  const client = await storageClient();
+  const { error } = await client.storage.from(storageBucket()).remove([media.storageKey]);
   if (error) throw new Error(`Supabase Storage cleanup failed (${error.name}).`);
 }
 
@@ -102,7 +107,7 @@ export async function storeProofImage(bytes: Buffer, extension: "jpg" | "png" | 
     await writeFile(path, bytes, { flag: "wx" });
     return { storageKey: key, publicPath: `/private/${key}`, provider } satisfies StoredMedia;
   }
-  const client = storageClient();
+  const client = await storageClient();
   const bucket = storageBucket();
   const { error } = await client.storage.from(bucket).upload(key, bytes, {
     cacheControl: "31536000",
@@ -124,7 +129,8 @@ export async function readProofMedia(storageKey: string) {
       return null;
     }
   }
-  const { data, error } = await storageClient().storage.from(storageBucket()).download(storageKey);
+  const client = await storageClient();
+  const { data, error } = await client.storage.from(storageBucket()).download(storageKey);
   if (error || !data) return null;
   return Buffer.from(await data.arrayBuffer());
 }

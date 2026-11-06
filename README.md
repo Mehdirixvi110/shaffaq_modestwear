@@ -4,10 +4,16 @@ SHAFFAQ is a Next.js 16 App Router storefront and administration application for
 
 | Profile | Database | New admin uploads | Intended use |
 |---|---|---|---|
-| Local | SQLite | Local persistent filesystem | One Node process on one durable host |
-| Hosted | Supabase PostgreSQL | Public Supabase Storage bucket | Vercel Node.js functions |
+| Self-hosted (live) | SQLite | Local persistent filesystem | cPanel "Setup Node.js App" (Phusion Passenger): one Node process on one durable host — the current production target |
+| Hosted (secondary) | Supabase PostgreSQL | Public Supabase Storage bucket | Vercel Node.js functions — supported in code but no longer the deployment target |
 
 The hosted profile uses asynchronous repositories, PostgreSQL transactions and conditional updates, the Supabase transaction pooler at runtime, and the session pooler only for controlled migration, seed, reconciliation, and administrator bootstrap commands.
+
+## Deployment
+
+The live site `https://shaffaqmodestwear.pk` is self-hosted on a cPanel "Setup Node.js App" (Phusion Passenger) host using the SQLite + local-media profile with `SELF_HOSTED_SQLITE=1`. [`docs/CPANEL_DEPLOYMENT.md`](docs/CPANEL_DEPLOYMENT.md) is the primary deployment guide: it covers the standalone build artifact, native modules on Linux, the exact cPanel app settings and environment variables, where the database and media must persist, domain/HTTPS, redeploy, backup, and the disk/bandwidth budget.
+
+Vercel is no longer the deployment target. The Supabase/PostgreSQL profile stays fully supported in code; its guides, [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) and [`docs/SUPABASE_MIGRATION.md`](docs/SUPABASE_MIGRATION.md), remain as secondary references.
 
 ## Implemented application
 
@@ -86,9 +92,9 @@ npm run bootstrap:admin:pg    # Supabase PostgreSQL through MIGRATION_DATABASE_U
 
 The command refuses to overwrite an existing administrator and never prints the password. No permanent PostgreSQL administrator is seeded automatically.
 
-## Hosted Supabase and Vercel profile
+## Hosted Supabase and Vercel profile (secondary)
 
-The hosted runtime requires:
+This profile stays fully supported in code but is no longer the deployment target; the live site uses the self-hosted cPanel profile described under [Deployment](#deployment). The hosted runtime requires:
 
 ```dotenv
 DATABASE_PROVIDER=postgres

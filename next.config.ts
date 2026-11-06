@@ -12,12 +12,34 @@ function supabaseRemotePatterns(): NonNullable<NonNullable<NextConfig["images"]>
   }
 }
 
+// When building the self-hosted sqlite + local-media profile, drop the Postgres and
+// Supabase drivers from the standalone file trace. That runtime never loads them (the
+// provider-scoped dynamic imports in src/db/provider.ts and src/server/media-storage.ts
+// only fire on the postgres/supabase path), but Next's tracer still copies the
+// string-literal module references into .next/standalone/node_modules. The exclude is
+// keyed to the profile so the Supabase/Vercel build (DATABASE_PROVIDER=postgres,
+// MEDIA_PROVIDER=supabase) still traces and ships both drivers.
+const selfHostedSqliteBuild = process.env.DATABASE_PROVIDER === "sqlite" && process.env.MEDIA_PROVIDER === "local";
+
 const nextConfig: NextConfig = {
+  // Standalone output bundles only traced dependencies and a minimal server into
+  // .next/standalone (with its own server.js), which is the deployment artifact for
+  // the cPanel "Setup Node.js App" startup file and keeps the footprint small on the
+  // 1 GB disk. Deploy note: .next/static and public/ are NOT copied into the
+  // standalone folder by the build — they must be placed alongside
+  // .next/standalone/server.js on the server (see docs/CPANEL_DEPLOYMENT.md).
+  output: "standalone",
+  ...(selfHostedSqliteBuild
+    ? { outputFileTracingExcludes: { "*": ["node_modules/postgres/**", "node_modules/@supabase/**"] } }
+    : {}),
   images: {
     unoptimized: true,
     remotePatterns: supabaseRemotePatterns(),
   },
-  serverExternalPackages: ["better-sqlite3", "@node-rs/argon2", "sharp", "postgres"],
+  // @supabase/supabase-js is external like postgres so the provider-scoped dynamic
+  // import in src/server/media-storage.ts resolves as a runtime require and stays out
+  // of the SQLite trace; the Supabase profile is unaffected (its host runs npm install).
+  serverExternalPackages: ["better-sqlite3", "@node-rs/argon2", "sharp", "postgres", "@supabase/supabase-js"],
   async headers() {
     // HSTS is only meaningful (and only valid) over HTTPS, so it is gated to
     // production builds. Local dev and the http://localhost production smoke
