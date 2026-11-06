@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { buildContentSecurityPolicy } from "@/lib/csp";
 
 // Next.js 16 renamed the `middleware` file convention to `proxy` (same request
 // lifecycle position, Node.js runtime). This proxy issues a fresh per-request
@@ -26,28 +27,19 @@ export function proxy(request: NextRequest) {
   if (supabaseUrl) {
     try {
       const parsed = new URL(supabaseUrl);
-      if (parsed.protocol === "https:") supabaseImg = ` ${parsed.origin}`;
+      if (parsed.protocol === "https:") supabaseImg = parsed.origin;
     } catch {
       // Ignore a malformed Supabase URL; img-src simply omits it.
     }
   }
 
-  const directives = [
-    "default-src 'self'",
-    "base-uri 'self'",
-    "object-src 'none'",
-    "frame-ancestors 'none'",
-    "form-action 'self'",
-    // React dev uses eval for richer stack traces; never in production.
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
-    "style-src 'self' 'unsafe-inline'",
-    `img-src 'self' data: blob:${supabaseImg}`,
-    "font-src 'self'",
-    // ws:/wss: are only needed for the dev HMR socket.
-    `connect-src 'self'${isDev ? " ws: wss:" : ""}`,
-  ];
-  if (isHttps) directives.push("upgrade-insecure-requests");
-  const csp = directives.join("; ");
+  const csp = buildContentSecurityPolicy({
+    isDev,
+    isHttps,
+    nonce,
+    supabaseImgOrigin: supabaseImg,
+    selfOrigin: request.nextUrl.origin,
+  });
 
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-nonce", nonce);

@@ -10,7 +10,7 @@ type Navigation = {
   collections: Array<{ id: number; slug: string; name: string }>;
 };
 
-export function SiteHeader({ announcement, navigation }: { announcement: string | null; navigation: Navigation }) {
+export function SiteHeader({ announcement, navigation, logoPath, logoAlt }: { announcement: string | null; navigation: Navigation; logoPath: string; logoAlt: string }) {
   const pathname = usePathname();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -64,7 +64,7 @@ export function SiteHeader({ announcement, navigation }: { announcement: string 
             <span aria-hidden="true">☰</span>
           </button>
           <Link className="header-logo" href="/" aria-label="SHAFFAQ home">
-            <Image src="/brand/logo.jpg" alt="" width={172} height={54} priority />
+            <Image src={logoPath} alt={logoAlt} width={172} height={54} priority />
             <span className="header-wordmark">SHAFFAQ</span>
           </Link>
           <nav className="desktop-navigation" aria-label="Primary navigation">

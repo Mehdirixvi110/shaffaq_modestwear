@@ -43,6 +43,13 @@
       "when": 1793979780267,
       "tag": "0005_lumpy_mac_gargan",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793987756531,
+      "tag": "0006_smooth_orphan",
+      "breakpoints": true
     }
   ]
 }

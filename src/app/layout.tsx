@@ -16,7 +16,8 @@ export async function generateMetadata(): Promise<Metadata> {
     title: { default: settings.seoTitle, template: `%s | ${settings.storeName}` },
     description: settings.seoDescription,
     alternates: { canonical: "/" },
-    openGraph: { title: settings.storeName, description: settings.seoDescription, type: "website", url: "/", siteName: settings.storeName },
+    openGraph: { title: settings.storeName, description: settings.seoDescription, type: "website", url: "/", siteName: settings.storeName, images: [{ url: settings.ogImagePath ?? "/brand/logo.jpg", alt: settings.ogImageAlt ?? settings.storeName }] },
+    twitter: { card: "summary_large_image", title: settings.storeName, description: settings.seoDescription, images: [settings.ogImagePath ?? "/brand/logo.jpg"] },
   };
 }
 
@@ -31,7 +32,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
       <body>
         <a className="skip-link" href="#main-content">Skip to content</a>
         <AppChrome
-          header={<SiteHeader announcement={settings.maintenanceMode ? settings.maintenanceMessage ?? "Checkout is temporarily unavailable." : settings.announcement} navigation={navigation} />}
+          header={<SiteHeader announcement={settings.maintenanceMode ? settings.maintenanceMessage ?? "Checkout is temporarily unavailable." : settings.announcement} navigation={navigation} logoPath={settings.headerLogoPath ?? "/brand/logo.jpg"} logoAlt={settings.headerLogoAlt ?? ""} />}
           footer={<SiteFooter settings={settings} />}
         >
           {children}

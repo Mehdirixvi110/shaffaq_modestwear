@@ -9,6 +9,7 @@ export const settings = pgTable("settings", {
   id: integer("id").primaryKey(),
   storeName: text("store_name").notNull().default("SHAFFAQ"), descriptor: text("descriptor").notNull().default("Abayas & Scarves"), announcement: text("announcement"),
   heroEyebrow: text("hero_eyebrow"), heroTitle: text("hero_title").notNull(), heroBody: text("hero_body"), heroCtaLabel: text("hero_cta_label"), heroCtaUrl: text("hero_cta_url"), heroDesktopPath: text("hero_desktop_path"), heroMobilePath: text("hero_mobile_path"),
+  headerLogoPath: text("header_logo_path"), headerLogoAlt: text("header_logo_alt"), footerLogoPath: text("footer_logo_path"), footerLogoAlt: text("footer_logo_alt"), ogImagePath: text("og_image_path"), ogImageAlt: text("og_image_alt"),
   shippingPkr: money("shipping_pkr").notNull().default(0), freeShippingThresholdPkr: money("free_shipping_threshold_pkr"), codEnabled: integer("cod_enabled").notNull().default(1),
   whatsappNumber: text("whatsapp_number"), contactEmail: text("contact_email"), contactPhone: text("contact_phone"), taxEnabled: integer("tax_enabled").notNull().default(0), taxRateBps: integer("tax_rate_bps").notNull().default(0),
   returnsPolicyUrl: text("returns_policy_url").notNull().default("/pages/returns"), exchangesPolicyUrl: text("exchanges_policy_url").notNull().default("/pages/returns"), instagramUrl: text("instagram_url"), facebookUrl: text("facebook_url"), tiktokUrl: text("tiktok_url"),

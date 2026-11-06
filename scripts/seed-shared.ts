@@ -48,6 +48,7 @@ export async function seedDatabase(connection: DatabaseConnection, options: { en
     await connection.prepare(`INSERT OR IGNORE INTO settings (
       id, store_name, descriptor, announcement, hero_eyebrow, hero_title, hero_body,
       hero_cta_label, hero_cta_url, hero_desktop_path, hero_mobile_path,
+      header_logo_path, header_logo_alt, footer_logo_path, footer_logo_alt, og_image_path, og_image_alt,
       shipping_pkr, free_shipping_threshold_pkr, cod_enabled,
       whatsapp_number, contact_email, contact_phone
     ) VALUES (1, 'SHAFFAQ', 'Abayas & Scarves',
@@ -55,7 +56,12 @@ export async function seedDatabase(connection: DatabaseConnection, options: { en
       'SHAFFAQ — SAMPLE EDIT', 'Elegance, in Every Layer.',
       'A preview of the SHAFFAQ catalogue experience.', 'Explore the edit',
       '/collections/new-edit', '/media/hero-desktop.jpeg', '/media/hero-mobile.jpg',
+      '/brand/logo.jpg', 'SHAFFAQ', '/brand/logo.jpg', 'SHAFFAQ Abayas & Scarves', NULL, NULL,
       250, 6000, 1, '923233367659', 'admin@shaffaqmodestwear.com', '923233367659')`).run();
+
+    await connection.prepare(`UPDATE settings SET header_logo_path=COALESCE(header_logo_path,'/brand/logo.jpg'),
+      footer_logo_path=COALESCE(footer_logo_path,'/brand/logo.jpg'), header_logo_alt=COALESCE(header_logo_alt,'SHAFFAQ'),
+      footer_logo_alt=COALESCE(footer_logo_alt,'SHAFFAQ Abayas & Scarves') WHERE id=1`).run();
 
     if (options.enforceBusinessSettings) {
       await connection.prepare(`UPDATE settings SET shipping_pkr = 250, free_shipping_threshold_pkr = 6000, cod_enabled = 1,

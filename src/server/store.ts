@@ -11,6 +11,12 @@ export type StoreSettings = {
   heroCtaUrl: string | null;
   heroDesktopPath: string | null;
   heroMobilePath: string | null;
+  headerLogoPath: string | null;
+  headerLogoAlt: string | null;
+  footerLogoPath: string | null;
+  footerLogoAlt: string | null;
+  ogImagePath: string | null;
+  ogImageAlt: string | null;
   shippingPkr: number;
   freeShippingThresholdPkr: number | null;
   codEnabled: number;
@@ -60,6 +66,9 @@ export async function getSettings() {
     hero_eyebrow AS heroEyebrow, hero_title AS heroTitle, hero_body AS heroBody,
     hero_cta_label AS heroCtaLabel, hero_cta_url AS heroCtaUrl,
     hero_desktop_path AS heroDesktopPath, hero_mobile_path AS heroMobilePath,
+    header_logo_path AS headerLogoPath, header_logo_alt AS headerLogoAlt,
+    footer_logo_path AS footerLogoPath, footer_logo_alt AS footerLogoAlt,
+    og_image_path AS ogImagePath, og_image_alt AS ogImageAlt,
     shipping_pkr AS shippingPkr, free_shipping_threshold_pkr AS freeShippingThresholdPkr,
     cod_enabled AS codEnabled, whatsapp_number AS whatsappNumber,
     contact_email AS contactEmail, contact_phone AS contactPhone,

@@ -14,7 +14,7 @@ export function SiteFooter({ settings }: { settings: StoreSettings }) {
     <footer className="site-footer">
       <div className="footer-grid shell">
         <section className="footer-brand" aria-labelledby="footer-brand-title">
-          <Image src="/brand/logo.jpg" width={300} height={168} alt="SHAFFAQ Abayas & Scarves" />
+          <Image src={settings.footerLogoPath ?? "/brand/logo.jpg"} width={300} height={168} alt={settings.footerLogoAlt ?? "SHAFFAQ Abayas & Scarves"} />
           <h2 id="footer-brand-title" className="sr-only">SHAFFAQ</h2>
           <p>{settings.descriptor}</p>
           {settings.contactEmail ? <a href={`mailto:${settings.contactEmail}`}>{settings.contactEmail}</a> : <p className="muted">Contact details can be added in Admin Settings.</p>}
