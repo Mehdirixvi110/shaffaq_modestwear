@@ -487,3 +487,11 @@
 .button--google:hover { background: #f7f8f8; }
 .auth-divider { display: flex; align-items: center; gap: .6rem; margin: .4rem 0; color: #8a7f7a; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; }
 .auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: #e7e0da; }
+
+/* Footer brand balance + newsletter polish. */
+.footer-brand { display: flex; flex-direction: column; gap: .55rem; align-items: flex-start; }
+.footer-brand img { height: auto; max-width: 200px; }
+.footer-brand__tagline { margin: 0; letter-spacing: .03em; }
+.footer-brand__email { font-size: .9rem; }
+.footer-newsletter .newsletter-intro { margin: .15rem 0 .85rem; font-size: .82rem; line-height: 1.5; opacity: .85; }
+.newsletter-consent span { font-size: .8rem; line-height: 1.4; }

@@ -29,6 +29,9 @@ const nextConfig: NextConfig = {
   // standalone folder by the build — they must be placed alongside
   // .next/standalone/server.js on the server (see docs/CPANEL_DEPLOYMENT.md).
   output: "standalone",
+  // Hide the Next.js dev-mode indicator ("N" badge) so it never overlaps the
+  // storefront's floating WhatsApp button in local dev. (It never renders in production.)
+  devIndicators: false,
   ...(selfHostedSqliteBuild
     ? { outputFileTracingExcludes: { "*": ["node_modules/postgres/**", "node_modules/@supabase/**"] } }
     : {}),

@@ -57,7 +57,7 @@ export async function seedDatabase(connection: DatabaseConnection, options: { en
       'A preview of the SHAFFAQ catalogue experience.', 'Explore the edit',
       '/collections/new-edit', '/media/hero-desktop.jpeg', '/media/hero-mobile.jpg',
       NULL, 'SHAFFAQ', NULL, 'SHAFFAQ Abayas & Scarves', NULL, NULL,
-      250, 6000, 1, '923233367659', 'admin@shaffaqmodestwear.com', '923233367659')`).run();
+      250, 6000, 1, '923233367659', 'info@shaffaqmodestwear.pk', '923233367659')`).run();
 
     await connection.prepare(`UPDATE settings SET
       header_logo_path = CASE WHEN header_logo_path = '/brand/logo.jpg' THEN NULL ELSE header_logo_path END,
@@ -67,7 +67,7 @@ export async function seedDatabase(connection: DatabaseConnection, options: { en
 
     if (options.enforceBusinessSettings) {
       await connection.prepare(`UPDATE settings SET shipping_pkr = 250, free_shipping_threshold_pkr = 6000, cod_enabled = 1,
-        whatsapp_number = '923233367659', contact_email = 'admin@shaffaqmodestwear.com', contact_phone = '923233367659',
+        whatsapp_number = '923233367659', contact_email = 'info@shaffaqmodestwear.pk', contact_phone = '923233367659',
         updated_at = unixepoch() * 1000 WHERE id = 1`).run();
     }
 
