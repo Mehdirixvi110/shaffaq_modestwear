@@ -50,6 +50,13 @@
       "when": 1793987756531,
       "tag": "0006_smooth_orphan",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794042141625,
+      "tag": "0007_tough_the_fury",
+      "breakpoints": true
     }
   ]
 }

@@ -191,6 +191,16 @@ export const sessions = sqliteTable("sessions", {
   createdAt: integer("created_at").notNull().default(now),
 }, (table) => [index("sessions_user_idx").on(table.userId)]);
 
+export const passwordResetCodes = sqliteTable("password_reset_codes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  codeHash: text("code_hash").notNull(),
+  expiresAt: integer("expires_at").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  usedAt: integer("used_at"),
+  createdAt: integer("created_at").notNull().default(now),
+}, (table) => [index("password_reset_codes_user_idx").on(table.userId)]);
+
 export const orders = sqliteTable("orders", {
   id: text("id").primaryKey(),
   reference: text("reference").notNull().unique(),

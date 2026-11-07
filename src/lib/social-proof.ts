@@ -33,11 +33,12 @@ export const WEIGHTED_CITIES: ReadonlyArray<{ name: string; weight: number }> = 
   { name: "Abbottabad", weight: 1 },
 ];
 
-// Timing constants (milliseconds).
-export const FIRST_DELAY_MIN_MS = 20_000;
-export const FIRST_DELAY_MAX_MS = 30_000;
-export const INTERVAL_MIN_MS = 240_000;
-export const INTERVAL_MAX_MS = 330_000;
+// Timing constants (milliseconds). First toast appears quickly; subsequent
+// toasts arrive on a randomized 15-25s cadence.
+export const FIRST_DELAY_MIN_MS = 4_000;
+export const FIRST_DELAY_MAX_MS = 8_000;
+export const INTERVAL_MIN_MS = 15_000;
+export const INTERVAL_MAX_MS = 25_000;
 export const VISIBLE_MS = 7_000;
 
 /** Inclusive random integer between min and max. */

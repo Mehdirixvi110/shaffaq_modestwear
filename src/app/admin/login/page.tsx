@@ -9,5 +9,5 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminLoginPage() {
   if (await getAdminPageActor()) redirect("/admin");
-  return <main className="login-page"><div className="login-card"><p className="eyebrow">Protected administration</p><h1>SHAFFAQ</h1><LoginForm /><p className="fine-print">The first administrator is created only through the environment-backed bootstrap command.</p><p><Link className="text-link" href="/">Return to storefront</Link></p></div></main>;
+  return <main className="login-page"><div className="login-card"><p className="eyebrow">Protected administration</p><h1>SHAFFAQ</h1><LoginForm /><p className="fine-print"><Link className="text-link" href="/admin/forgot">Forgot your password?</Link></p><p><Link className="text-link" href="/">Return to storefront</Link></p></div></main>;
 }
