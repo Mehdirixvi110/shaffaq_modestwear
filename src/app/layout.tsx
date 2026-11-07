@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { AppChrome } from "@/components/app-chrome";
+import { DeliveryMarquee, buildDeliveryMessages } from "@/components/delivery-marquee";
 import { PurchaseNotifications } from "@/components/purchase-notifications";
 import { WhatsappChatButton } from "@/components/whatsapp-chat-button";
 import { SiteFooter } from "@/components/site-footer";
@@ -27,12 +28,13 @@ export const runtime = "nodejs";
 
 export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   const [settings, navigation] = await Promise.all([getSettings(), getNavigation()]);
+  const marqueeMessages = settings.maintenanceMode ? [] : buildDeliveryMessages(settings);
   return (
     <html lang="en-PK">
       <body>
         <a className="skip-link" href="#main-content">Skip to content</a>
         <AppChrome
-          header={<SiteHeader announcement={settings.maintenanceMode ? settings.maintenanceMessage ?? "Checkout is temporarily unavailable." : settings.announcement} navigation={navigation} logoPath={settings.headerLogoPath ?? "/brand/logo.jpg"} logoAlt={settings.headerLogoAlt ?? ""} />}
+          header={<><DeliveryMarquee messages={marqueeMessages} /><SiteHeader announcement={settings.maintenanceMode ? settings.maintenanceMessage ?? "Checkout is temporarily unavailable." : settings.announcement} navigation={navigation} logoPath={settings.headerLogoPath ?? "/brand/logo.jpg"} logoAlt={settings.headerLogoAlt ?? ""} /></>}
           footer={<SiteFooter settings={settings} />}
         >
           {children}

@@ -109,6 +109,12 @@ try {
   await assertFaviconLoads(page, "desktop-storefront");
   await assertChatButton(page, "desktop-storefront");
   await assertNoToastOverlap(page, "desktop-storefront");
+  // FEAT E: the delivery marquee renders delivery copy and scrolls.
+  const marquee = page.locator(".delivery-marquee");
+  await marquee.waitFor({ state: "visible" });
+  assert((await marquee.innerText()).toLowerCase().includes("delivery"), "Delivery marquee did not render delivery copy.");
+  const marqueeAnim = await page.locator(".delivery-marquee__row").evaluate((element) => getComputedStyle(element).animationName);
+  assert(marqueeAnim === "delivery-marquee-scroll", `Delivery marquee is not scrolling (animationName=${marqueeAnim}).`);
   await page.getByLabel("Email address").fill("smoke-newsletter@example.test");
   await page.getByRole("checkbox", { name: /email me SHAFFAQ/ }).check();
   await page.getByRole("button", { name: "Subscribe" }).click();
@@ -297,6 +303,9 @@ try {
   await motionChat.waitFor({ state: "visible" });
   const animation = await motionChat.evaluate((element) => ({ base: getComputedStyle(element).animationName, ring: getComputedStyle(element, "::after").animationName }));
   assert(animation.base === "none" && animation.ring === "none", `Chat button animation is not disabled under prefers-reduced-motion: ${JSON.stringify(animation)}.`);
+  // FEAT E: the delivery marquee is static under prefers-reduced-motion.
+  const marqueeMotion = await motionPage.locator(".delivery-marquee__row").evaluate((element) => getComputedStyle(element).animationName);
+  assert(marqueeMotion === "none", `Delivery marquee should not animate under prefers-reduced-motion: ${marqueeMotion}.`);
   await motionContext.close();
 
   assert(cspViolations.length === 0, `CSP violations detected:\n${cspViolations.join("\n")}`);
