@@ -481,3 +481,9 @@
 .password-toggle { position: absolute; right: .45rem; top: 50%; transform: translateY(-50%); border: 0; background: none; padding: .3rem .45rem; font-size: .68rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #7a3f4b; cursor: pointer; }
 .password-toggle:hover { text-decoration: underline; }
 .password-toggle:focus-visible { outline: 2px solid #7a3f4b; outline-offset: 2px; border-radius: .2rem; }
+
+/* "Sign in with Google" button + divider on the admin login. */
+.button--google { background: #ffffff; color: #3c4043; border: 1px solid #dadce0; font-weight: 600; }
+.button--google:hover { background: #f7f8f8; }
+.auth-divider { display: flex; align-items: center; gap: .6rem; margin: .4rem 0; color: #8a7f7a; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; }
+.auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: #e7e0da; }
