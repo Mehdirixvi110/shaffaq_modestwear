@@ -233,6 +233,14 @@
   .checkout-summary .fine-print { margin: 1rem 0; }
   .checkout-summary .button + .button { margin-top: .65rem; }
   .whatsapp-notice { margin-top: .8rem; color: var(--muted); font-size: .78rem; }
+  .checkout-whatsapp-fallback { display: flex; align-items: center; justify-content: space-between; gap: 1.25rem; flex-wrap: wrap; padding: 1.1rem 1.25rem; background: var(--ivory); border-left: 3px solid var(--rose); }
+  .checkout-whatsapp-fallback p:not(.eyebrow) { margin-top: .25rem; max-width: 46ch; color: var(--muted); font-size: .9rem; }
+  .checkout-whatsapp-fallback .button { white-space: nowrap; }
+  .checkout-autofill-note { color: var(--muted); font-size: .82rem; }
+  .link-button { border: 0; background: none; padding: 0; color: var(--rose); font: inherit; text-decoration: underline; text-underline-offset: .2rem; cursor: pointer; }
+  .field-error { display: block; margin-top: .35rem; color: var(--error); font-size: .78rem; font-style: normal; }
+  input[aria-invalid="true"], select[aria-invalid="true"] { border-color: var(--error); }
+  .checkout-fields input[readonly] { background: var(--ivory); color: var(--muted); cursor: default; }
   .checkout-result { max-width: 680px; margin: 2rem auto; padding: 3rem; background: var(--ivory); text-align: center; }
   .checkout-result h2 { margin: .4rem 0 1rem; }
   .checkout-result .button-row { justify-content: center; margin-top: 1.5rem; }

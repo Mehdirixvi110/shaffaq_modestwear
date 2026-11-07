@@ -22,13 +22,16 @@ async function addFirstProduct(page) {
   await page.getByText("Added to your shopping bag.").waitFor();
 }
 
-async function fillCheckout(page, suffix) {
+async function fillCheckout(page, suffix, { email } = {}) {
   await page.goto(`${baseURL}/checkout`);
   await page.getByLabel("Full name").fill(`Smoke Customer ${suffix}`);
-  await page.getByLabel("Email", { exact: true }).fill(`smoke-${suffix}@example.test`);
+  // Email is optional now. Pass email: "" to exercise the no-email path; otherwise
+  // use a gmail address so the consumer-provider allowlist happy-path is covered.
+  if (email !== "") await page.getByLabel("Email (optional)").fill(email ?? `smoke-${suffix}@gmail.com`);
   await page.getByLabel("Pakistan phone").fill("03001234567");
   await page.getByLabel("Address line 1").fill("1 Test Street");
-  await page.getByLabel("City").fill("Karachi");
+  // City is a province-grouped dropdown; selecting it auto-fills the Province field.
+  await page.getByLabel("City").selectOption("Karachi");
 }
 
 // --- Hardening checks: favicon, strict CSP, and the WhatsApp chat button ---
@@ -106,9 +109,9 @@ try {
   await assertFaviconLoads(page, "desktop-storefront");
   await assertChatButton(page, "desktop-storefront");
   await assertNoToastOverlap(page, "desktop-storefront");
-  await page.getByLabel("Newsletter email").fill("smoke-newsletter@example.test");
-  await page.getByRole("checkbox", { name: /explicitly consent/ }).check();
-  await page.getByRole("button", { name: "Record consent" }).click();
+  await page.getByLabel("Email address").fill("smoke-newsletter@example.test");
+  await page.getByRole("checkbox", { name: /email me SHAFFAQ/ }).check();
+  await page.getByRole("button", { name: "Subscribe" }).click();
   const newsletterMessage = await page.locator(".newsletter-form p").first().innerText();
   assert(newsletterMessage.includes("Consent recorded"), `Newsletter consent failed: ${newsletterMessage}`);
   const unsubscribeHref = await page.getByRole("link", { name: "Save your unsubscribe link" }).getAttribute("href");
@@ -127,6 +130,23 @@ try {
   await page.goto(`${baseURL}/cart`);
   assert(await page.locator(".cart-line").count() === 1, "Server-backed cart did not persist.");
   await fillCheckout(page, "cod");
+  // FEAT A: Province auto-fills from the selected city (Karachi -> Sindh).
+  assert((await page.getByLabel("Province").inputValue()) === "Sindh", "Province did not auto-fill from the selected city.");
+  // FEAT A: the "we'll do it for you" WhatsApp fallback links to the business number.
+  const fallbackHref = await page.locator(".checkout-whatsapp-fallback a").getAttribute("href");
+  assert(Boolean(fallbackHref?.startsWith(`https://wa.me/${whatsappNumber}?text=`)), `Checkout WhatsApp fallback href is wrong (${fallbackHref}).`);
+  // FEAT A: "Other / not listed" reveals a manual province selector so an unlisted town is never blocked.
+  await page.getByLabel("City").selectOption("__other__");
+  await page.getByLabel("Area / town").fill("Example Village");
+  await page.getByLabel("Province").selectOption("Punjab");
+  await page.getByLabel("City").selectOption("Karachi");
+  assert((await page.getByLabel("Province").inputValue()) === "Sindh", "Province did not re-derive after returning to a listed city.");
+  // FEAT A: an invalid phone is rejected client-side and does not navigate away.
+  await page.getByLabel("Pakistan phone").fill("0300");
+  await page.getByRole("button", { name: "Place cash-on-delivery order" }).click();
+  await page.getByText("starting with 03", { exact: false }).first().waitFor({ timeout: 5000 });
+  assert(page.url().includes("/checkout"), "Invalid phone should not navigate away from checkout.");
+  await page.getByLabel("Pakistan phone").fill("03001234567");
   await page.getByRole("button", { name: "Place cash-on-delivery order" }).click();
   await page.waitForURL(/\/orders\/SHQ-/);
   await page.getByText("pending confirmation", { exact: false }).first().waitFor();
@@ -138,7 +158,8 @@ try {
   const inquiryPage = await inquiryContext.newPage();
   watchPage(inquiryPage, "desktop-inquiry");
   await addFirstProduct(inquiryPage);
-  await fillCheckout(inquiryPage, "whatsapp");
+  // Email left blank here to verify an order persists without one (FEAT A optional email).
+  await fillCheckout(inquiryPage, "whatsapp", { email: "" });
   await inquiryPage.getByRole("button", { name: "Create WhatsApp inquiry" }).click();
   await inquiryPage.getByText("Inquiry recorded").waitFor();
   const whatsappHref = await inquiryPage.getByRole("link", { name: "Open WhatsApp" }).getAttribute("href");
@@ -154,8 +175,9 @@ try {
   await adminPage.goto(`${baseURL}/admin`);
   await adminPage.waitForURL(/\/admin\/login/);
   await adminPage.getByLabel("Email").fill(adminEmail);
-  await adminPage.getByLabel("Password").fill(adminPassword);
-  await adminPage.getByRole("button", { name: "Sign in" }).click();
+  // Password field has a reveal toggle sharing the label, so target the input by name.
+  await adminPage.locator('input[name="password"]').fill(adminPassword);
+  await adminPage.getByRole("button", { name: "Sign in", exact: true }).click();
   await adminPage.waitForURL(`${baseURL}/admin`);
   await adminPage.getByRole("heading", { name: "Dashboard" }).waitFor();
   assert((await adminPage.locator("a.whatsapp-chat").count()) === 0, "Chat button must be absent on /admin.");

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CHECKOUT_NAME_REGEX, CHECKOUT_PHONE_REGEX, isAllowedConsumerEmail } from "./checkout-contact";
 
 export const slugSchema = z.string().trim().toLowerCase().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).max(180);
 export const positiveId = z.coerce.number().int().positive();
@@ -16,11 +17,27 @@ export function normalizePkPhone(raw: string): string {
   return `+92${digits.slice(-10)}`;
 }
 
+// Checkout contact rules (stricter than the lead form on purpose):
+//  - name: letters only, no digits (shared CHECKOUT_NAME_REGEX)
+//  - phone: exactly 03XXXXXXXXX, digits only (shared CHECKOUT_PHONE_REGEX)
+//  - email: OPTIONAL. Empty string is accepted; when present it must be a valid
+//    address on an allowed consumer provider. Defaults to "" so orders.email
+//    (NOT NULL) always receives a string.
+export const checkoutNameSchema = z.string().trim().min(1).max(100).regex(CHECKOUT_NAME_REGEX);
+export const checkoutPhoneSchema = z.string().trim().regex(CHECKOUT_PHONE_REGEX);
+export const optionalConsumerEmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(254)
+  .refine((value) => value === "" || isAllowedConsumerEmail(value))
+  .default("");
+
 export const checkoutSchema = z.object({
   idempotencyKey: z.uuidv4(),
-  customerName: cleanText(100),
-  email: z.email().max(254),
-  phone: z.string().trim().regex(/^(?:\+92|92|0)?3\d{9}$/),
+  customerName: checkoutNameSchema,
+  email: optionalConsumerEmailSchema,
+  phone: checkoutPhoneSchema,
   addressLine1: cleanText(160),
   addressLine2: z.string().trim().max(160).optional().default(""),
   city: cleanText(100),

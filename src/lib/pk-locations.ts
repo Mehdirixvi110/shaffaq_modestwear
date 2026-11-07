@@ -1,0 +1,130 @@
+// Pakistan cities with their province/territory, used for the checkout City
+// dropdown and automatic Province selection. Not exhaustive, but covers the
+// major and mid-size cities customers are likely to enter. Extend freely.
+
+export const PK_PROVINCES = [
+  "Punjab",
+  "Sindh",
+  "Khyber Pakhtunkhwa",
+  "Balochistan",
+  "Islamabad Capital Territory",
+  "Gilgit-Baltistan",
+  "Azad Jammu & Kashmir",
+] as const;
+
+export type PkProvince = (typeof PK_PROVINCES)[number];
+
+export const PK_CITIES: ReadonlyArray<{ city: string; province: PkProvince }> = [
+  // Islamabad Capital Territory
+  { city: "Islamabad", province: "Islamabad Capital Territory" },
+  // Punjab
+  { city: "Lahore", province: "Punjab" },
+  { city: "Rawalpindi", province: "Punjab" },
+  { city: "Faisalabad", province: "Punjab" },
+  { city: "Gujranwala", province: "Punjab" },
+  { city: "Multan", province: "Punjab" },
+  { city: "Sialkot", province: "Punjab" },
+  { city: "Bahawalpur", province: "Punjab" },
+  { city: "Sargodha", province: "Punjab" },
+  { city: "Sheikhupura", province: "Punjab" },
+  { city: "Rahim Yar Khan", province: "Punjab" },
+  { city: "Jhang", province: "Punjab" },
+  { city: "Gujrat", province: "Punjab" },
+  { city: "Kasur", province: "Punjab" },
+  { city: "Okara", province: "Punjab" },
+  { city: "Sahiwal", province: "Punjab" },
+  { city: "Wah Cantonment", province: "Punjab" },
+  { city: "Dera Ghazi Khan", province: "Punjab" },
+  { city: "Chiniot", province: "Punjab" },
+  { city: "Kamoke", province: "Punjab" },
+  { city: "Hafizabad", province: "Punjab" },
+  { city: "Khanewal", province: "Punjab" },
+  { city: "Muzaffargarh", province: "Punjab" },
+  { city: "Jhelum", province: "Punjab" },
+  { city: "Gojra", province: "Punjab" },
+  { city: "Mandi Bahauddin", province: "Punjab" },
+  { city: "Daska", province: "Punjab" },
+  { city: "Vehari", province: "Punjab" },
+  { city: "Burewala", province: "Punjab" },
+  { city: "Attock", province: "Punjab" },
+  { city: "Nankana Sahib", province: "Punjab" },
+  { city: "Toba Tek Singh", province: "Punjab" },
+  { city: "Jaranwala", province: "Punjab" },
+  { city: "Chakwal", province: "Punjab" },
+  { city: "Mianwali", province: "Punjab" },
+  { city: "Bhakkar", province: "Punjab" },
+  { city: "Pakpattan", province: "Punjab" },
+  { city: "Lodhran", province: "Punjab" },
+  { city: "Narowal", province: "Punjab" },
+  { city: "Bahawalnagar", province: "Punjab" },
+  { city: "Khushab", province: "Punjab" },
+  // Sindh
+  { city: "Karachi", province: "Sindh" },
+  { city: "Hyderabad", province: "Sindh" },
+  { city: "Sukkur", province: "Sindh" },
+  { city: "Larkana", province: "Sindh" },
+  { city: "Nawabshah", province: "Sindh" },
+  { city: "Mirpur Khas", province: "Sindh" },
+  { city: "Jacobabad", province: "Sindh" },
+  { city: "Shikarpur", province: "Sindh" },
+  { city: "Khairpur", province: "Sindh" },
+  { city: "Dadu", province: "Sindh" },
+  { city: "Thatta", province: "Sindh" },
+  { city: "Badin", province: "Sindh" },
+  { city: "Tando Adam", province: "Sindh" },
+  { city: "Tando Allahyar", province: "Sindh" },
+  { city: "Umerkot", province: "Sindh" },
+  { city: "Ghotki", province: "Sindh" },
+  { city: "Sanghar", province: "Sindh" },
+  { city: "Matiari", province: "Sindh" },
+  // Khyber Pakhtunkhwa
+  { city: "Peshawar", province: "Khyber Pakhtunkhwa" },
+  { city: "Mardan", province: "Khyber Pakhtunkhwa" },
+  { city: "Mingora", province: "Khyber Pakhtunkhwa" },
+  { city: "Abbottabad", province: "Khyber Pakhtunkhwa" },
+  { city: "Kohat", province: "Khyber Pakhtunkhwa" },
+  { city: "Bannu", province: "Khyber Pakhtunkhwa" },
+  { city: "Dera Ismail Khan", province: "Khyber Pakhtunkhwa" },
+  { city: "Nowshera", province: "Khyber Pakhtunkhwa" },
+  { city: "Charsadda", province: "Khyber Pakhtunkhwa" },
+  { city: "Mansehra", province: "Khyber Pakhtunkhwa" },
+  { city: "Swabi", province: "Khyber Pakhtunkhwa" },
+  { city: "Hangu", province: "Khyber Pakhtunkhwa" },
+  { city: "Haripur", province: "Khyber Pakhtunkhwa" },
+  { city: "Timergara", province: "Khyber Pakhtunkhwa" },
+  { city: "Tank", province: "Khyber Pakhtunkhwa" },
+  { city: "Chitral", province: "Khyber Pakhtunkhwa" },
+  // Balochistan
+  { city: "Quetta", province: "Balochistan" },
+  { city: "Turbat", province: "Balochistan" },
+  { city: "Khuzdar", province: "Balochistan" },
+  { city: "Hub", province: "Balochistan" },
+  { city: "Chaman", province: "Balochistan" },
+  { city: "Gwadar", province: "Balochistan" },
+  { city: "Zhob", province: "Balochistan" },
+  { city: "Loralai", province: "Balochistan" },
+  { city: "Sibi", province: "Balochistan" },
+  { city: "Mastung", province: "Balochistan" },
+  { city: "Kalat", province: "Balochistan" },
+  { city: "Pishin", province: "Balochistan" },
+  { city: "Nushki", province: "Balochistan" },
+  // Gilgit-Baltistan
+  { city: "Gilgit", province: "Gilgit-Baltistan" },
+  { city: "Skardu", province: "Gilgit-Baltistan" },
+  { city: "Chilas", province: "Gilgit-Baltistan" },
+  { city: "Hunza", province: "Gilgit-Baltistan" },
+  // Azad Jammu & Kashmir
+  { city: "Muzaffarabad", province: "Azad Jammu & Kashmir" },
+  { city: "Mirpur", province: "Azad Jammu & Kashmir" },
+  { city: "Rawalakot", province: "Azad Jammu & Kashmir" },
+  { city: "Kotli", province: "Azad Jammu & Kashmir" },
+  { city: "Bhimber", province: "Azad Jammu & Kashmir" },
+  { city: "Bagh", province: "Azad Jammu & Kashmir" },
+];
+
+const PROVINCE_BY_CITY = new Map(PK_CITIES.map((entry) => [entry.city.toLowerCase(), entry.province]));
+
+/** Returns the province for a known city name, or null if the city is not in the list. */
+export function provinceForCity(city: string): PkProvince | null {
+  return PROVINCE_BY_CITY.get(city.trim().toLowerCase()) ?? null;
+}

@@ -213,11 +213,14 @@ export async function getAdminCustomers(input: { q?: string } = {}) {
     where = "WHERE customer_name LIKE ? ESCAPE '\\' OR email LIKE ? ESCAPE '\\' OR phone LIKE ? ESCAPE '\\'";
     parameters.push(query, query, query);
   }
-  return database.prepare(`SELECT MIN(customer_name) AS customerName, LOWER(email) AS email, MIN(phone) AS phone,
+  // Group by phone (the required, normalized field) rather than email, which is
+  // now optional — grouping on email would collapse every email-less order into
+  // one bogus "customer". MAX(email) surfaces whatever email the customer did give.
+  return database.prepare(`SELECT MIN(customer_name) AS customerName, MAX(email) AS email, phone,
     COUNT(*) AS orderCount, SUM(CASE WHEN order_status != 'CANCELLED' THEN total_pkr ELSE 0 END) AS orderedPkr,
     SUM(CASE WHEN payment_status = 'PAID' THEN total_pkr ELSE 0 END) AS collectedPkr,
     MAX(created_at) AS lastOrderAt, MIN(created_at) AS firstOrderAt
-    FROM orders ${where} GROUP BY LOWER(email) ORDER BY MAX(created_at) DESC`).all<Record<string, string | number | null>>(...parameters);
+    FROM orders ${where} GROUP BY phone ORDER BY MAX(created_at) DESC`).all<Record<string, string | number | null>>(...parameters);
 }
 
 export async function getAdminReturnRequests(input: { status?: string; q?: string } = {}) {

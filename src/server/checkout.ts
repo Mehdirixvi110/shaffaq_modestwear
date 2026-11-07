@@ -99,8 +99,13 @@ export async function loadCheckoutContext(
     if (line.quantity > line.stock) throw new ApiError(409, "STOCK_CHANGED", `${line.productTitle} no longer has the requested quantity.`);
   }
   const base = calculateTotals(lines.map((line) => ({ unitPricePkr: line.pricePkr, quantity: line.quantity })), settings.shippingPkr, settings.freeShippingThresholdPkr);
-  const normalizedEmail = input.email.toLowerCase();
-  const contactHash = canonicalHash({ email: normalizedEmail });
+  // Email is optional at checkout. The contact hash (used for per-customer coupon
+  // limits) falls back to the normalized phone when no email was given, so coupon
+  // caps still work for email-less orders.
+  const normalizedEmail = input.email; // schema already trimmed + lowercased
+  const contactHash = normalizedEmail
+    ? canonicalHash({ email: normalizedEmail })
+    : canonicalHash({ phone: normalizePhone(input.phone) });
   const coupon = await getCouponEvaluation(connection, persistedCoupon, lines.map((line) => ({ unitPricePkr: line.pricePkr, quantity: line.quantity, productId: line.productId, collectionId: line.collectionId })), base.subtotalPkr, contactHash, Date.now(), true);
   const totals = calculateCommerceTotals(
     lines.map((line) => ({ unitPricePkr: line.pricePkr, quantity: line.quantity })),
@@ -125,7 +130,7 @@ export async function persistOrderFromCart(
   const { source, input, context, orderId, reference } = args;
   const { lines, base, coupon, contactHash, totals } = context;
   const normalizedPhone = normalizePhone(input.phone);
-  const normalizedEmail = input.email.toLowerCase();
+  const normalizedEmail = input.email; // schema already trimmed + lowercased ("" when omitted)
   const accessToken = orderAccessToken(orderId);
   const orderStatus = source === "WHATSAPP_INQUIRY" ? "INQUIRY" : "PENDING_CONFIRMATION";
   const allocated = source !== "WHATSAPP_INQUIRY";
