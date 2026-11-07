@@ -277,6 +277,19 @@ try {
   await couponPage.waitForURL(/\/orders\/SHQ-/);
   await couponContext.close();
 
+  progress("content pages");
+  const pagesContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  pagesContext.setDefaultNavigationTimeout(90_000);
+  const pagesPage = await pagesContext.newPage();
+  watchPage(pagesPage, "content-pages");
+  for (const [slug, needle] of [["about", "shaffaq"], ["size-guide", "measure"], ["care", "wash"], ["shipping", "delivery"], ["returns", "exchange"]]) {
+    await pagesPage.goto(`${baseURL}/pages/${slug}`);
+    const copy = (await pagesPage.locator(".policy-copy").innerText()).toLowerCase();
+    assert(copy.includes(needle), `Content page /pages/${slug} is missing expected copy (${needle}).`);
+    assert(!copy.includes("template requiring"), `Content page /pages/${slug} still shows the seed placeholder.`);
+  }
+  await pagesContext.close();
+
   progress("390px responsive navigation and grid");
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   mobileContext.setDefaultNavigationTimeout(90_000);
