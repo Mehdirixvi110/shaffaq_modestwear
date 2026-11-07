@@ -223,6 +223,23 @@ export async function getAdminCustomers(input: { q?: string } = {}) {
     FROM orders ${where} GROUP BY phone ORDER BY MAX(created_at) DESC`).all<Record<string, string | number | null>>(...parameters);
 }
 
+// Per-customer order history, keyed by the normalized phone. Derived from the
+// immutable order contact snapshots — no separate customer table to keep in sync.
+export async function getAdminCustomerDetail(phone: string) {
+  const summary = await database.prepare(`SELECT MIN(customer_name) AS customerName, MAX(email) AS email, phone,
+    COUNT(*) AS orderCount, SUM(CASE WHEN order_status != 'CANCELLED' THEN total_pkr ELSE 0 END) AS orderedPkr,
+    SUM(CASE WHEN payment_status = 'PAID' THEN total_pkr ELSE 0 END) AS collectedPkr,
+    MAX(created_at) AS lastOrderAt, MIN(created_at) AS firstOrderAt
+    FROM orders WHERE phone = ? GROUP BY phone`).get<Record<string, string | number | null>>(phone);
+  if (!summary) return null;
+  const orders = await database.prepare(`SELECT id, reference, order_status AS orderStatus, fulfillment_status AS fulfillmentStatus,
+    payment_status AS paymentStatus, source, total_pkr AS totalPkr, city, region, created_at AS createdAt
+    FROM orders WHERE phone = ? ORDER BY created_at DESC, id DESC`).all<Record<string, string | number | null>>(phone);
+  const latestAddress = await database.prepare(`SELECT address_line1 AS addressLine1, address_line2 AS addressLine2, city, region, postal_code AS postalCode
+    FROM orders WHERE phone = ? ORDER BY created_at DESC, id DESC LIMIT 1`).get<Record<string, string | null>>(phone);
+  return { summary, orders, latestAddress };
+}
+
 export async function getAdminReturnRequests(input: { status?: string; q?: string } = {}) {
   const conditions: string[] = [];
   const parameters: string[] = [];

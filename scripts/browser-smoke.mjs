@@ -278,6 +278,12 @@ try {
   await adminPage.getByText("Smoke Journal Post").first().waitFor();
   await adminPage.goto(`${baseURL}/blog/smoke-journal-post`);
   await adminPage.getByRole("heading", { name: "Smoke Journal Post" }).waitFor();
+  // FEAT B: customer order-history drill-down (derived from orders, keyed by phone).
+  await adminPage.goto(`${baseURL}/admin/customers`);
+  await adminPage.getByRole("heading", { name: "Customers" }).waitFor();
+  await adminPage.locator(".admin-table tbody tr td a").first().click();
+  await adminPage.waitForURL(/\/admin\/customers\/.+/);
+  await adminPage.getByText(/SHQ-/).first().waitFor();
   await adminContext.close();
 
   progress("coupon checkout");
