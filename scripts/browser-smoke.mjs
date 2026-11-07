@@ -260,6 +260,24 @@ try {
     await adminPage.goto(`${baseURL}/admin/${path}`);
     await adminPage.getByRole("heading", { name: heading }).waitFor();
   }
+  // FEAT C: create and publish a blog post from admin, then confirm it is public.
+  await adminPage.goto(`${baseURL}/admin/blog`);
+  await adminPage.getByRole("heading", { name: "Blog", exact: true }).waitFor();
+  await adminPage.locator(".create-panel > summary").click();
+  const blogForm = adminPage.locator(".create-panel form");
+  await blogForm.getByLabel("Title", { exact: true }).fill("Smoke Journal Post");
+  await blogForm.getByLabel("Slug").fill("smoke-journal-post");
+  await blogForm.getByLabel("Body").fill("## Hello\nThis is a smoke-tested journal post body.");
+  await blogForm.getByLabel("Status").selectOption("PUBLISHED");
+  await Promise.all([
+    adminPage.waitForResponse((response) => response.url().endsWith("/api/admin/blog") && response.request().method() === "POST" && response.status() === 201),
+    blogForm.getByRole("button", { name: "Create post" }).click(),
+  ]);
+  // The manager reloads on success; wait for the new post to appear in the list
+  // (reload complete) before navigating, then confirm it is publicly visible.
+  await adminPage.getByText("Smoke Journal Post").first().waitFor();
+  await adminPage.goto(`${baseURL}/blog/smoke-journal-post`);
+  await adminPage.getByRole("heading", { name: "Smoke Journal Post" }).waitFor();
   await adminContext.close();
 
   progress("coupon checkout");
@@ -276,6 +294,20 @@ try {
   await couponPage.getByRole("button", { name: "Place cash-on-delivery order" }).click();
   await couponPage.waitForURL(/\/orders\/SHQ-/);
   await couponContext.close();
+
+  progress("blog (public index, post, Article JSON-LD)");
+  const blogContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  blogContext.setDefaultNavigationTimeout(90_000);
+  const blogPage = await blogContext.newPage();
+  watchPage(blogPage, "blog");
+  await blogPage.goto(`${baseURL}/blog`);
+  assert(await blogPage.locator(".blog-card").count() >= 1, "Blog index rendered no posts.");
+  await blogPage.locator(".blog-card__body h2 a").first().click();
+  await blogPage.waitForURL(/\/blog\/.+/);
+  await blogPage.locator("article.blog-post h1").waitFor();
+  const articleLd = (await blogPage.locator('script[type="application/ld+json"]').first().textContent()) ?? "";
+  assert(articleLd.includes('"Article"'), "Blog post is missing Article JSON-LD.");
+  await blogContext.close();
 
   progress("content pages");
   const pagesContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });

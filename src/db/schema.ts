@@ -296,6 +296,24 @@ export const policies = sqliteTable("policies", {
   updatedAt: integer("updated_at").notNull().default(now),
 });
 
+export const blogPosts = sqliteTable("blog_posts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  slug: text("slug").notNull().unique(),
+  title: text("title").notNull(),
+  excerpt: text("excerpt"),
+  body: text("body").notNull(),
+  coverImagePath: text("cover_image_path"),
+  coverImageAlt: text("cover_image_alt"),
+  author: text("author"),
+  status: text("status", { enum: ["DRAFT", "PUBLISHED"] }).notNull().default("DRAFT"),
+  publishedAt: integer("published_at"),
+  seoTitle: text("seo_title"),
+  seoDescription: text("seo_description"),
+  version: integer("version").notNull().default(1),
+  createdAt: integer("created_at").notNull().default(now),
+  updatedAt: integer("updated_at").notNull().default(now),
+}, (table) => [index("blog_posts_status_idx").on(table.status, table.publishedAt)]);
+
 export const mediaFiles = sqliteTable("media_files", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   displayName: text("display_name").notNull(),

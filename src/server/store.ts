@@ -213,6 +213,32 @@ export async function getPolicy(slug: string) {
   return database.prepare("SELECT id, slug, title, content, is_template AS isTemplate, updated_at AS updatedAt FROM policies WHERE slug = ?").get<{ id: number; slug: string; title: string; content: string; isTemplate: number; updatedAt: number }>(slug);
 }
 
+export type BlogPostSummary = {
+  id: number;
+  slug: string;
+  title: string;
+  excerpt: string | null;
+  coverImagePath: string | null;
+  coverImageAlt: string | null;
+  author: string | null;
+  publishedAt: number;
+};
+export type BlogPost = BlogPostSummary & { body: string; seoTitle: string | null; seoDescription: string | null; updatedAt: number };
+
+// Published posts only, newest first, excluding any future-dated publish time.
+export async function getBlogPosts(): Promise<BlogPostSummary[]> {
+  return database.prepare(`SELECT id, slug, title, excerpt, cover_image_path AS coverImagePath, cover_image_alt AS coverImageAlt,
+    author, COALESCE(published_at, created_at) AS publishedAt
+    FROM blog_posts WHERE status = 'PUBLISHED' AND COALESCE(published_at, created_at) <= ?
+    ORDER BY COALESCE(published_at, created_at) DESC, id DESC`).all<BlogPostSummary>(Date.now());
+}
+
+export async function getBlogPost(slug: string): Promise<BlogPost | undefined> {
+  return database.prepare(`SELECT id, slug, title, excerpt, body, cover_image_path AS coverImagePath, cover_image_alt AS coverImageAlt,
+    author, COALESCE(published_at, created_at) AS publishedAt, seo_title AS seoTitle, seo_description AS seoDescription, updated_at AS updatedAt
+    FROM blog_posts WHERE slug = ? AND status = 'PUBLISHED' AND COALESCE(published_at, created_at) <= ?`).get<BlogPost>(slug, Date.now());
+}
+
 export type ReviewSource = "CUSTOMER" | "ADMIN";
 
 export type ApprovedReview = {

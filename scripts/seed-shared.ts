@@ -330,6 +330,70 @@ export async function seedDatabase(connection: DatabaseConnection, options: { en
       await refreshTemplatePolicy.run(title, content, isTemplate, slug);
     }
 
+    // Starter blog posts for SEO. Original content; the owner edits or replaces them in
+    // Admin -> Blog. INSERT OR IGNORE keeps re-seeds from duplicating existing slugs.
+    const blogRows: Array<readonly [string, string, string, string, string]> = [
+      ["how-to-style-an-abaya", "How to Style an Abaya for Every Occasion", "From everyday errands to evening events, simple ways to style your abaya with confidence.", [
+        "An abaya is the easiest way to look put-together with almost no effort. Here is how to style yours from morning to evening.",
+        "",
+        "## Keep it simple for daytime",
+        "For errands and work, let the abaya do the talking. A neutral tone, flat shoes, and a structured bag keep the look clean and comfortable.",
+        "",
+        "## Add structure for the office",
+        "- Choose a tailored, straight-cut abaya in a solid colour.",
+        "- Define the waist with a slim belt.",
+        "- Finish with simple studs and a neat scarf.",
+        "",
+        "## Dress it up for evenings",
+        "For events, reach for richer fabrics and soft draping. A deeper colour, a statement scarf, and a little sparkle in your accessories transform the same silhouette into something special.",
+        "",
+        "## Let the scarf finish the look",
+        "Your scarf is the fastest way to change a mood — soft neutrals for calm, deep jewel tones for occasions. Keep one in your bag and you are ready for anything.",
+      ].join("\n"), "/media/sample-look-01.png"],
+      ["choosing-the-right-abaya-fabric", "Choosing the Right Abaya Fabric", "Nida, crepe, linen, or formal weaves — a quick guide to picking the fabric that suits you.", [
+        "The right fabric changes how an abaya feels, drapes, and lasts. Here is a quick guide to choosing well.",
+        "",
+        "## Nida and premium crepe",
+        "Soft, matte, and beautifully flowing, these fabrics suit both everyday wear and events. They resist wrinkles and hold their shape.",
+        "",
+        "## Linen blends for warm days",
+        "Breathable and light, linen blends are ideal for Pakistan's warmer months, with a relaxed, natural texture.",
+        "",
+        "## Formal fabrics for occasions",
+        "For weddings and events, look for a subtle sheen and a heavier drape that moves gracefully.",
+        "",
+        "## What to check before you buy",
+        "- Hold the fabric to the light to judge its weight and opacity.",
+        "- Drape it over your arm to see how it falls.",
+        "- Think about the season and how often you will wear it.",
+        "",
+        "Still unsure? Message us on WhatsApp and we will help you choose.",
+      ].join("\n"), "/media/sample-look-03.png"],
+      ["caring-for-your-scarves", "Caring for Your Scarves", "Keep your scarves looking new with a few gentle washing, drying, and storage habits.", [
+        "A good scarf lasts for years with a little care. These simple habits keep yours looking new.",
+        "",
+        "## Wash gently",
+        "Hand wash in cold water with a mild detergent, or use a delicate cycle inside a laundry bag. Avoid bleach and fabric softener.",
+        "",
+        "## Dry with care",
+        "Never wring a scarf. Press out excess water, reshape it, and dry flat or on a soft hanger away from direct sun.",
+        "",
+        "## Store neatly",
+        "- Fold loosely or roll to avoid hard creases.",
+        "- Keep delicate and embellished scarves separate.",
+        "- Store in a cool, dry place.",
+        "",
+        "## Refresh between wears",
+        "A quick steam, or a low iron with a cloth on top, keeps a scarf crisp without damaging the fibres.",
+      ].join("\n"), "/media/sample-look-05.png"],
+    ];
+    const insertPost = connection.prepare(`INSERT OR IGNORE INTO blog_posts (slug, title, excerpt, body, cover_image_path, cover_image_alt, author, status, published_at, seo_title, seo_description)
+      VALUES (?, ?, ?, ?, ?, ?, 'SHAFFAQ', 'PUBLISHED', ?, ?, ?)`);
+    const blogBaseTime = Date.now();
+    for (const [index, [slug, title, excerpt, body, cover]] of blogRows.entries()) {
+      await insertPost.run(slug, title, excerpt, body, cover, title, blogBaseTime - index * 86_400_000, title, excerpt);
+    }
+
     const insertMedia = connection.prepare("INSERT OR IGNORE INTO media_files (display_name, storage_key, public_path, mime, bytes, sha256) VALUES (?, NULL, ?, ?, ?, ?)");
     for (const asset of assets) {
       const destination = resolve(process.cwd(), asset.destination);

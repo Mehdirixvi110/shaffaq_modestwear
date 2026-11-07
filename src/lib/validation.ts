@@ -49,3 +49,17 @@ export const checkoutSchema = z.object({
 }).strict();
 
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
+
+// Shared blog-post field rules, reused by the create (POST) and update (PATCH) admin routes.
+export const blogPostFields = {
+  slug: slugSchema,
+  title: z.string().trim().min(1).max(200),
+  excerpt: z.string().trim().max(400).nullable(),
+  body: z.string().trim().min(1).max(50000),
+  coverImagePath: z.string().trim().max(500).nullable(),
+  coverImageAlt: z.string().trim().max(300).nullable(),
+  author: z.string().trim().max(120).nullable(),
+  status: z.enum(["DRAFT", "PUBLISHED"]),
+  seoTitle: z.string().trim().max(200).nullable(),
+  seoDescription: z.string().trim().max(400).nullable(),
+};

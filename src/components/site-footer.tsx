@@ -4,7 +4,7 @@ import type { StoreSettings } from "@/server/store";
 import { NewsletterForm } from "./newsletter-form";
 
 const groups = (settings: StoreSettings) => [
-  { title: "Explore", links: [["Shop all", "/search"], ["New edit", "/collections/new-edit"], ["Wishlist", "/wishlist"], ["About", "/pages/about"], ["Contact", "/pages/contact"]] },
+  { title: "Explore", links: [["Shop all", "/search"], ["New edit", "/collections/new-edit"], ["Journal", "/blog"], ["Wishlist", "/wishlist"], ["About", "/pages/about"], ["Contact", "/pages/contact"]] },
   { title: "Customer care", links: [["FAQ", "/pages/faq"], ["Size guide", "/pages/size-guide"], ["Shipping", "/pages/shipping"], ["Returns", settings.returnsPolicyUrl], ["Exchanges", settings.exchangesPolicyUrl], ["Care guide", "/pages/care"], ["Payment information", "/pages/payments"]] },
   { title: "Legal", links: [["Privacy", "/pages/privacy"], ["Terms & conditions", "/pages/terms"], ["Admin", "/admin"]] },
 ];

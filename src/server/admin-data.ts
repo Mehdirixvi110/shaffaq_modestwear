@@ -241,6 +241,18 @@ export async function getAdminPolicies() {
   return database.prepare("SELECT id, slug, title, content, is_template AS isTemplate, updated_at AS updatedAt FROM policies ORDER BY title").all<{ id: number; slug: string; title: string; content: string; isTemplate: number; updatedAt: number }>();
 }
 
+export type AdminBlogPost = {
+  id: number; slug: string; title: string; excerpt: string | null; body: string;
+  coverImagePath: string | null; coverImageAlt: string | null; author: string | null;
+  status: "DRAFT" | "PUBLISHED"; publishedAt: number | null;
+  seoTitle: string | null; seoDescription: string | null; version: number; updatedAt: number;
+};
+export async function getAdminBlogPosts() {
+  return database.prepare(`SELECT id, slug, title, excerpt, body, cover_image_path AS coverImagePath, cover_image_alt AS coverImageAlt,
+    author, status, published_at AS publishedAt, seo_title AS seoTitle, seo_description AS seoDescription, version, updated_at AS updatedAt
+    FROM blog_posts ORDER BY COALESCE(published_at, created_at) DESC, id DESC`).all<AdminBlogPost>();
+}
+
 export async function getAdminMedia() {
   return database.prepare("SELECT id, display_name AS displayName, public_path AS publicPath, mime, bytes, width, height, sha256, replaced_by_id AS replacedById, replaced_at AS replacedAt, created_at AS createdAt FROM media_files ORDER BY id DESC").all<{ id: number; displayName: string; publicPath: string; mime: string; bytes: number; width: number | null; height: number | null; sha256: string; replacedById: number | null; replacedAt: number | null; createdAt: number }>();
 }
