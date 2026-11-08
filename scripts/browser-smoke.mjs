@@ -328,6 +328,27 @@ try {
   }
   await pagesContext.close();
 
+  progress("navigation redesign (tabs, dropdown, badge, cart, destinations)");
+  const navContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  navContext.setDefaultNavigationTimeout(90_000);
+  const navPage = await navContext.newPage();
+  watchPage(navPage, "navigation");
+  await navPage.goto(baseURL);
+  assert(await navPage.locator(".desktop-navigation .nav-badge").count() >= 1, "New Arrivals badge is missing from the primary nav.");
+  await navPage.getByRole("link", { name: "Cart", exact: true }).first().waitFor();
+  assert((await navPage.getByRole("link", { name: "Shopping bag" }).count()) === 0, "Header still exposes a 'Shopping bag' action instead of Cart.");
+  // Abaya Collection dropdown reveals and navigates to a resolving collection.
+  await navPage.getByRole("button", { name: "Abaya Collection" }).click();
+  await navPage.getByRole("link", { name: "Premium Collection" }).click();
+  await navPage.waitForURL(/\/collections\/premium-abayas/);
+  await navPage.getByRole("heading", { name: "Premium Collection" }).waitFor();
+  // Exclusive Customisation and New Arrivals destinations resolve.
+  await navPage.goto(`${baseURL}/pages/customisation`);
+  await navPage.getByRole("heading", { name: "Exclusive Customisation" }).waitFor();
+  await navPage.goto(`${baseURL}/search?sort=newest`);
+  await navPage.getByRole("heading", { name: "Shop the edit" }).waitFor();
+  await navContext.close();
+
   progress("390px responsive navigation and grid");
   const mobileContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
   mobileContext.setDefaultNavigationTimeout(90_000);

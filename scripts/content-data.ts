@@ -185,6 +185,18 @@ export const policyRows: Array<readonly [string, string, string, number]> = [
     "Send us a message",
     "Use the form below and we'll get back to you as soon as we can.",
   ].join("\n"), 0],
+  ["customisation", "Exclusive Customisation", [
+    "Looking for something made just for you? SHAFFAQ offers exclusive customisation on abayas and scarves.",
+    "",
+    "What we can customise",
+    "Made-to-measure sizing for the perfect fit, fabric and colour choices from our range, sleeve, length, and neckline adjustments, and personal touches such as subtle embroidery or trims.",
+    "",
+    "How it works",
+    "Message us on WhatsApp with your idea, measurements, and any reference photos. We'll confirm the details, share a price and a timeline, and keep you updated until your piece is ready.",
+    "",
+    "Get started",
+    "Tap the WhatsApp button or use the Contact page to begin your custom order. We'd love to bring your vision to life.",
+  ].join("\n"), 0],
 ];
 
 // Starter blog posts for SEO. Original content; the owner edits or replaces them in

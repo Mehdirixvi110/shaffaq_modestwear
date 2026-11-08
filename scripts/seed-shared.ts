@@ -83,6 +83,20 @@ export async function seedDatabase(connection: DatabaseConnection, options: { en
     const collectionRows = [
       ["new-edit", "New Edit", "A sample collection for the initial storefront.", "/media/sample-look-02.png", 0],
       ["versatile-selection", "Versatile Selection", "A sample collection for the initial storefront.", "/media/sample-look-06.png", 1],
+      // Navigation-backed collections. They start empty; assign products to them in Admin ->
+      // Collections. The storefront nav (src/components/site-header.tsx) links to these slugs.
+      ["premium-abayas", "Premium Collection", "Our finest premium abayas.", "/media/sample-look-01.png", 2],
+      ["occasion-abayas", "Occasion Wears", "Standout abayas for special occasions.", "/media/sample-look-05.png", 3],
+      ["everyday-abayas", "Everyday Abayas", "Comfortable abayas for daily wear.", "/media/sample-look-03.png", 4],
+      ["office-abayas", "Office Wears", "Polished abayas for the workplace.", "/media/sample-look-04.png", 5],
+      ["printed-scarves", "Printed Scarves", "Printed hijabs and scarves.", "/media/sample-look-02.png", 6],
+      ["plain-scarves", "Plain Scarves", "Classic plain hijabs and scarves.", "/media/sample-look-06.png", 7],
+      ["occasion-scarves", "Occasion Wears", "Scarves for special occasions.", "/media/sample-look-05.png", 8],
+      ["summer-scarves", "Summer Collection", "Light, breathable scarves for warm days.", "/media/sample-look-03.png", 9],
+      ["winter-scarves", "Winter Collection", "Warm scarves for cooler weather.", "/media/sample-look-01.png", 10],
+      ["premium-scarves", "Premium Wear", "Our premium hijab range.", "/media/sample-look-04.png", 11],
+      ["bundle-offers", "Bundle Offers", "Curated bundles at a better price.", "/media/campaign-wide.jpeg", 12],
+      ["clearance-sales", "Clearance Sales", "Final-reduction pieces while stocks last.", "/media/sample-look-02.png", 13],
     ] as const;
     const insertCollection = connection.prepare("INSERT OR IGNORE INTO collections (slug, name, description, image_path, position, visible, updated_at) VALUES (?, ?, ?, ?, ?, 1, unixepoch() * 1000)");
     for (const row of collectionRows) await insertCollection.run(...row);
