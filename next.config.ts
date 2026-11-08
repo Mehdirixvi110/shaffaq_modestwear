@@ -12,14 +12,17 @@ function supabaseRemotePatterns(): NonNullable<NonNullable<NextConfig["images"]>
   }
 }
 
-// When building the self-hosted sqlite + local-media profile, drop the Postgres and
-// Supabase drivers from the standalone file trace. That runtime never loads them (the
-// provider-scoped dynamic imports in src/db/provider.ts and src/server/media-storage.ts
-// only fire on the postgres/supabase path), but Next's tracer still copies the
-// string-literal module references into .next/standalone/node_modules. The exclude is
-// keyed to the profile so the Supabase/Vercel build (DATABASE_PROVIDER=postgres,
-// MEDIA_PROVIDER=supabase) still traces and ships both drivers.
-const selfHostedSqliteBuild = process.env.DATABASE_PROVIDER === "sqlite" && process.env.MEDIA_PROVIDER === "local";
+// Drop drivers the chosen profile never loads from the standalone file trace. The
+// provider-scoped dynamic imports (src/db/provider.ts, src/server/media-storage.ts) only
+// fire on their path, but Next's tracer still copies the string-literal module references
+// into .next/standalone/node_modules. Excludes are keyed to EXPLICIT env so an unset build
+// keeps both drivers: sqlite data never loads Postgres; local media never loads Supabase.
+// The hybrid (DATABASE_PROVIDER=sqlite, MEDIA_PROVIDER=supabase) therefore keeps @supabase
+// and drops only postgres, and the Vercel build (postgres + supabase) ships both.
+const tracingExcludes = [
+  ...(process.env.DATABASE_PROVIDER === "sqlite" ? ["node_modules/postgres/**"] : []),
+  ...(process.env.MEDIA_PROVIDER === "local" ? ["node_modules/@supabase/**"] : []),
+];
 
 const nextConfig: NextConfig = {
   // Standalone output bundles only traced dependencies and a minimal server into
@@ -32,9 +35,7 @@ const nextConfig: NextConfig = {
   // Hide the Next.js dev-mode indicator ("N" badge) so it never overlaps the
   // storefront's floating WhatsApp button in local dev. (It never renders in production.)
   devIndicators: false,
-  ...(selfHostedSqliteBuild
-    ? { outputFileTracingExcludes: { "*": ["node_modules/postgres/**", "node_modules/@supabase/**"] } }
-    : {}),
+  ...(tracingExcludes.length ? { outputFileTracingExcludes: { "*": tracingExcludes } } : {}),
   images: {
     unoptimized: true,
     remotePatterns: supabaseRemotePatterns(),

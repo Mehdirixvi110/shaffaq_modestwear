@@ -12,6 +12,13 @@ no longer used for this site; it remains supported in code only.
 > **Plan reality check — 1 GB disk / 10 GB bandwidth is tight.** The server's `node_modules`
 > alone is a few hundred MB. Read the [Disk and bandwidth budget](#13-disk-and-bandwidth-budget)
 > section before you start and keep product images small.
+>
+> **Recommended on a small plan: the SQLite + Supabase-media hybrid.** Keep the tiny text
+> database (products, orders, blog posts) on the server and offload the heavy image files to
+> Supabase Storage (free tier). This is what stops `MEDIA_ROOT` from growing and filling the disk.
+> See [8a. Recommended hybrid](#8a-recommended-hybrid-keep-sqlite-local-put-media-on-supabase-storage).
+> Everywhere below that sets `MEDIA_PROVIDER=local`, use `MEDIA_PROVIDER=supabase` plus the three
+> Supabase variables instead.
 
 ---
 
@@ -204,6 +211,55 @@ destroys them.
 Do **not** use the default relative paths (`.data/db/shaffaq.sqlite`, `.data/media`) in
 production: the standalone server changes its working directory to `<approot>`, so a relative path
 would place your live database **inside the deploy directory**, where the next upload wipes it.
+
+## 8a. Recommended hybrid: keep SQLite local, put media on Supabase Storage
+
+On a 1 GB plan the biggest growth risk is uploaded product and blog images. You can keep the small
+text database on the server and store every **admin-uploaded** image in Supabase Storage (free
+tier) instead of on local disk. The app supports this directly — no code changes — and the runtime
+validator accepts `DATABASE_PROVIDER=sqlite` + `MEDIA_PROVIDER=supabase` behind `SELF_HOSTED_SQLITE=1`.
+
+Differences from the local-media profile above:
+
+- **One-time Supabase setup.** In the Supabase dashboard → Storage, create a **public** bucket
+  named `shaffaq-media`, restricted to image types (JPEG/PNG/WebP) with a 10 MiB per-object cap.
+  (You already have a Supabase project; only the bucket matters for this profile — the Postgres
+  database is not used here.)
+
+- **Environment variables (step 6).** Set `MEDIA_PROVIDER=supabase` instead of `local` and add the
+  three Supabase Storage values. `SQLITE_PATH` stays the same; `MEDIA_ROOT` is unused.
+
+  | Name | Value |
+  |---|---|
+  | `MEDIA_PROVIDER` | `supabase` |
+  | `SUPABASE_URL` | project URL, e.g. `https://xxxx.supabase.co` (exact HTTPS origin) |
+  | `SUPABASE_SECRET_KEY` | project secret/service key (server-only, ≥32 chars) |
+  | `SUPABASE_STORAGE_BUCKET` | `shaffaq-media` |
+
+  `DATABASE_PROVIDER=sqlite` and `SELF_HOSTED_SQLITE=1` are unchanged.
+
+- **Build (step 2).** Build with `MEDIA_PROVIDER=supabase` so the file trace keeps the Supabase
+  client (`@supabase/supabase-js`) while still dropping the unused Postgres driver:
+
+  ```powershell
+  $env:DATABASE_PROVIDER='sqlite'
+  $env:MEDIA_PROVIDER='supabase'
+  $env:SUPABASE_URL='https://xxxx.supabase.co'
+  $env:APP_ORIGIN='https://shaffaqmodestwear.pk'
+  $env:NEXT_PUBLIC_APP_ORIGIN='https://shaffaqmodestwear.pk'
+  npm run build
+  ```
+
+- **Initialize the database (step 7): unchanged** — still `db:migrate` / `db:seed` /
+  `bootstrap:admin` against SQLite. The seeded sample images ship inside `public/` and keep serving
+  locally; only images you upload later through the admin are stored in Supabase.
+
+- **Backups (step 12).** You still back up the SQLite file, but media now lives in Supabase, so
+  there is no large `MEDIA_ROOT` to copy off-server — Supabase retains the images.
+
+Images served from `https://<project>.supabase.co/storage/v1/object/public/...` are already allowed
+by the Content-Security-Policy (`src/proxy.ts`) and the Next image config (`next.config.ts`), both
+of which read `SUPABASE_URL`.
 
 ## 9. Map the domain and enable HTTPS
 

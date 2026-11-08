@@ -49,6 +49,14 @@ function requireHttpsUrl(env: RuntimeEnvironment, name: string) {
   return url;
 }
 
+function requireSupabaseStorage(env: RuntimeEnvironment) {
+  requireHttpsUrl(env, "SUPABASE_URL");
+  const secretKey = requireValue(env, "SUPABASE_SECRET_KEY");
+  if (Buffer.byteLength(secretKey, "utf8") < 32) throw new Error("SUPABASE_SECRET_KEY is invalid.");
+  const bucket = requireValue(env, "SUPABASE_STORAGE_BUCKET");
+  if (!/^[a-z0-9][a-z0-9._-]{1,62}$/i.test(bucket)) throw new Error("SUPABASE_STORAGE_BUCKET is invalid.");
+}
+
 function requirePostgresUrl(env: RuntimeEnvironment) {
   const value = requireValue(env, "DATABASE_URL");
   let url: URL;
@@ -98,23 +106,23 @@ export function validateRuntimeConfiguration(env: RuntimeEnvironment = process.e
     return;
   }
 
-  // Self-hosted production opt-in: permit ONLY sqlite + local media, and nothing else.
-  // The exact-HTTPS origin, strong distinct secrets, and payment fail-closed checks
-  // above have already run, so this only widens the provider pair, not the other guards.
+  // Self-hosted production opt-in (e.g. cPanel Node): sqlite data, with media either
+  // local OR on Supabase Storage. The Supabase-media variant is the recommended hybrid
+  // for a small host — the tiny text database stays local while the heavy image files
+  // live in Supabase Storage. The exact-HTTPS origin, strong distinct secrets, and
+  // payment fail-closed checks above have already run; this only widens the provider pair.
   if (selfHostedSqlite) {
     if (env.DATABASE_PROVIDER !== "sqlite") throw new Error("DATABASE_PROVIDER must be sqlite when SELF_HOSTED_SQLITE=1.");
-    if (env.MEDIA_PROVIDER !== "local") throw new Error("MEDIA_PROVIDER must be local when SELF_HOSTED_SQLITE=1.");
+    const media = env.MEDIA_PROVIDER?.trim();
+    if (media !== "local" && media !== "supabase") throw new Error("MEDIA_PROVIDER must be local or supabase when SELF_HOSTED_SQLITE=1.");
+    if (media === "supabase") requireSupabaseStorage(env);
     return;
   }
 
   if (env.DATABASE_PROVIDER !== "postgres") throw new Error("DATABASE_PROVIDER must be postgres in production.");
   requirePostgresUrl(env);
   if (env.MEDIA_PROVIDER !== "supabase") throw new Error("MEDIA_PROVIDER must be supabase in production.");
-  requireHttpsUrl(env, "SUPABASE_URL");
-  const secretKey = requireValue(env, "SUPABASE_SECRET_KEY");
-  if (Buffer.byteLength(secretKey, "utf8") < 32) throw new Error("SUPABASE_SECRET_KEY is invalid.");
-  const bucket = requireValue(env, "SUPABASE_STORAGE_BUCKET");
-  if (!/^[a-z0-9][a-z0-9._-]{1,62}$/i.test(bucket)) throw new Error("SUPABASE_STORAGE_BUCKET is invalid.");
+  requireSupabaseStorage(env);
 }
 
 export function databaseProvider(env: RuntimeEnvironment = process.env): "sqlite" | "postgres" {

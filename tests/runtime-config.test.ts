@@ -76,8 +76,16 @@ describe("self-hosted SQLite production profile (SELF_HOSTED_SQLITE)", () => {
     expect(() => validateRuntimeConfiguration({ ...selfHosted, CSRF_SECRET: selfHosted.SESSION_SECRET })).toThrow("independent");
   });
 
-  it("permits only local media, rejecting supabase even behind the flag", () => {
-    expect(() => validateRuntimeConfiguration({ ...selfHosted, MEDIA_PROVIDER: "supabase" })).toThrow("MEDIA_PROVIDER");
+  it("permits the sqlite + Supabase-media hybrid behind the flag when storage vars are valid", () => {
+    expect(() => validateRuntimeConfiguration({ ...selfHosted, MEDIA_PROVIDER: "supabase" })).not.toThrow();
+  });
+
+  it("rejects the Supabase-media hybrid when a storage var is missing", () => {
+    expect(() => validateRuntimeConfiguration({ ...selfHosted, MEDIA_PROVIDER: "supabase", SUPABASE_STORAGE_BUCKET: "" })).toThrow("SUPABASE_STORAGE_BUCKET");
+  });
+
+  it("still rejects an unknown media provider behind the flag", () => {
+    expect(() => validateRuntimeConfiguration({ ...selfHosted, MEDIA_PROVIDER: "s3" })).toThrow("MEDIA_PROVIDER");
   });
 
   it("ignores the flag on Vercel and still forces postgres", () => {
