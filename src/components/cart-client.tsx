@@ -52,7 +52,7 @@ export function CartClient({ initialCart }: { initialCart: CartState }) {
     void updateCoupon(couponCode);
   }
 
-  if (cart.lines.length === 0) return <div className="empty-state cart-empty"><p className="eyebrow">Your bag</p><h1>Your bag is empty</h1><p>Explore the sample edit when you are ready.</p><Link className="button button--dark" href="/search">Shop the edit</Link></div>;
+  if (cart.lines.length === 0) return <div className="empty-state cart-empty"><p className="eyebrow">Your cart</p><h1>Your cart is empty</h1><p>Explore the collection when you are ready.</p><Link className="button button--dark" href="/search">Shop the edit</Link></div>;
   return (
     <div className="cart-layout">
       <div className="cart-lines">

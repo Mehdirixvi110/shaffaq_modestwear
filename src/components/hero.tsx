@@ -5,8 +5,8 @@ import type { StoreSettings } from "@/server/store";
 export function Hero({ settings }: { settings: StoreSettings }) {
   return (
     <section className="hero" aria-labelledby="hero-title">
-      {settings.heroDesktopPath ? <Image className="hero-image hero-image--desktop" src={settings.heroDesktopPath} alt="SHAFFAQ sample campaign" fill priority sizes="100vw" /> : null}
-      {settings.heroMobilePath ? <Image className="hero-image hero-image--mobile" src={settings.heroMobilePath} alt="SHAFFAQ sample mobile campaign" fill priority sizes="100vw" /> : null}
+      {settings.heroDesktopPath ? <Image className="hero-image hero-image--desktop" src={settings.heroDesktopPath} alt="SHAFFAQ campaign" fill priority sizes="100vw" /> : null}
+      {settings.heroMobilePath ? <Image className="hero-image hero-image--mobile" src={settings.heroMobilePath} alt="SHAFFAQ campaign" fill priority sizes="100vw" /> : null}
       <div className="hero-shade" />
       <div className="hero-content shell">
         <div className="hero-panel">

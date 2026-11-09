@@ -42,7 +42,7 @@ export async function HomeSections({ sections, featured }: { sections: HomeSecti
     );
     if (section.type === "EDITORIAL") return (
       <section className="section editorial shell" key={section.id} aria-labelledby={`section-${section.id}`}>
-        <div className="editorial-image">{section.imagePath ? <Image src={section.imagePath} alt="SHAFFAQ sample editorial" fill sizes="(max-width: 767px) 100vw, 55vw" /> : null}</div>
+        <div className="editorial-image">{section.imagePath ? <Image src={section.imagePath} alt="SHAFFAQ editorial" fill sizes="(max-width: 767px) 100vw, 55vw" /> : null}</div>
         <div className="editorial-copy"><p className="eyebrow">Editorial</p><h2 id={`section-${section.id}`}>{section.title}</h2>{section.body ? <p>{section.body}</p> : null}{section.linkLabel && section.linkUrl ? <Link className="text-link" href={section.linkUrl}>{section.linkLabel} →</Link> : null}</div>
       </section>
     );

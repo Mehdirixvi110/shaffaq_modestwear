@@ -8,7 +8,6 @@ export function ProductCard({ product }: { product: ProductSummary }) {
     <article className="product-card">
       <Link className="product-card-image" href={`/products/${product.slug}`} aria-label={`View ${product.title}`}>
         {product.imagePath ? <Image src={product.imagePath} alt={product.imageAlt ?? product.title} fill sizes="(max-width: 767px) 50vw, (max-width: 1279px) 33vw, 25vw" /> : <span className="image-placeholder">Image pending</span>}
-        {product.isSample ? <span className="sample-badge">Sample catalogue</span> : null}
       </Link>
       <div className="product-card-copy">
         <div><p className="product-kicker">{product.collectionName ?? product.categoryName ?? "SHAFFAQ"}</p><h3><Link href={`/products/${product.slug}`}>{product.title}</Link></h3></div>

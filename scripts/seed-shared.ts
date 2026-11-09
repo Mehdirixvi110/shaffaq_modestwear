@@ -42,7 +42,7 @@ export function verifySeedAssets(copyAssets = true) {
   }
 }
 
-const sampleDescription = "Sample catalogue item for setup. Replace this editable name, description, price, imagery, and stock before accepting real orders.";
+const sampleDescription = "A beautifully crafted SHAFFAQ piece designed for comfort and everyday elegance.";
 
 export async function seedDatabase(connection: DatabaseConnection, options: { enforceBusinessSettings: boolean }) {
   await connection.transaction(async () => {
@@ -53,9 +53,9 @@ export async function seedDatabase(connection: DatabaseConnection, options: { en
       shipping_pkr, free_shipping_threshold_pkr, cod_enabled,
       whatsapp_number, contact_email, contact_phone
     ) VALUES (1, 'SHAFFAQ', 'Abayas & Scarves',
-      'Sample storefront — review catalogue and policy details before launch.',
-      'SHAFFAQ — SAMPLE EDIT', 'Elegance, in Every Layer.',
-      'A preview of the SHAFFAQ catalogue experience.', 'Explore the edit',
+      NULL,
+      'The SHAFFAQ Edit', 'Elegance, in Every Layer.',
+      'Abayas and scarves designed for everyday elegance.', 'Explore the edit',
       '/collections/new-edit', '/media/hero-desktop.jpeg', '/media/hero-mobile.jpg',
       NULL, 'SHAFFAQ', NULL, 'SHAFFAQ Abayas & Scarves', NULL, NULL,
       250, 6000, 1, '923233367659', 'info@shaffaqmodestwear.pk', '923233367659')`).run();
@@ -73,16 +73,16 @@ export async function seedDatabase(connection: DatabaseConnection, options: { en
     }
 
     const categoryRows = [
-      ["the-edit", "The Edit", "A sample category ready for owner edits.", "/media/sample-look-01.png", 0],
-      ["everyday-layers", "Everyday Layers", "A sample category ready for owner edits.", "/media/sample-look-03.png", 1],
-      ["occasion-selection", "Occasion Selection", "A sample category ready for owner edits.", "/media/sample-look-05.png", 2],
+      ["the-edit", "The Edit", "A curated edit of SHAFFAQ favourites.", "/media/sample-look-01.png", 0],
+      ["everyday-layers", "Everyday Layers", "Easy, everyday modest layers.", "/media/sample-look-03.png", 1],
+      ["occasion-selection", "Occasion Selection", "Standout pieces for special occasions.", "/media/sample-look-05.png", 2],
     ] as const;
     const insertCategory = connection.prepare("INSERT OR IGNORE INTO categories (slug, name, description, image_path, position, visible, updated_at) VALUES (?, ?, ?, ?, ?, 1, unixepoch() * 1000)");
     for (const row of categoryRows) await insertCategory.run(...row);
 
     const collectionRows = [
-      ["new-edit", "New Edit", "A sample collection for the initial storefront.", "/media/sample-look-02.png", 0],
-      ["versatile-selection", "Versatile Selection", "A sample collection for the initial storefront.", "/media/sample-look-06.png", 1],
+      ["new-edit", "New Edit", "The newest additions to the SHAFFAQ edit.", "/media/sample-look-02.png", 0],
+      ["versatile-selection", "Versatile Selection", "Versatile pieces for every day.", "/media/sample-look-06.png", 1],
       // Navigation-backed collections. They start empty; assign products to them in Admin ->
       // Collections. The storefront nav (src/components/site-header.tsx) links to these slugs.
       ["premium-abayas", "Premium Collection", "Our finest premium abayas.", "/media/sample-look-01.png", 2],
@@ -128,7 +128,7 @@ export async function seedDatabase(connection: DatabaseConnection, options: { en
       const result = await insertProduct.run(product.slug, product.title, sampleDescription, product.categoryId, product.collectionId, `${product.title} | SHAFFAQ`, sampleDescription);
       if (result.changes === 0) continue;
       const productId = result.lastInsertRowid;
-      await insertImage.run(productId, product.image, `${product.title}, sample catalogue photograph`);
+      await insertImage.run(productId, product.image, product.title);
       const optionId = (await insertOption.run(productId)).lastInsertRowid;
       for (const [position, size] of ["52", "54", "56"].entries()) {
         const valueId = (await insertValue.run(optionId, size, position)).lastInsertRowid;
@@ -145,12 +145,12 @@ export async function seedDatabase(connection: DatabaseConnection, options: { en
       WHERE products.is_sample = 1 AND variants.sku LIKE 'SAMPLE-%'`).run();
 
     const sectionRows = [
-      ["CATEGORY_GRID", "Shop the edit", "Explore the sample catalogue by mood.", null, null, null, 0],
-      ["FEATURED", "New to SHAFFAQ", "Sample products are clearly labelled and ready to edit.", null, "View all", "/search", 1],
-      ["CAMPAIGN", "The SHAFFAQ Edit", "A sample campaign section ready for your collection story.", "/media/campaign-wide.jpeg", "Explore", "/collections/versatile-selection", 2],
-      ["EDITORIAL", "Versatile by design", "A visual sample area for owner-approved editorial content.", "/media/sample-look-06.png", "Discover the collection", "/collections/versatile-selection", 3],
-      ["REVIEWS", "Customer notes", "No verified reviews yet.", null, null, null, 4],
-      ["SERVICES", "Shopping information", "Shipping and cash-on-delivery terms come from the settings you configure.", null, null, null, 5],
+      ["CATEGORY_GRID", "Shop the edit", "Explore the collection by mood.", null, null, null, 0],
+      ["FEATURED", "New to SHAFFAQ", "Discover our latest arrivals.", null, "View all", "/search", 1],
+      ["CAMPAIGN", "The SHAFFAQ Edit", "Timeless modest wear, crafted with care.", "/media/campaign-wide.jpeg", "Explore", "/collections/versatile-selection", 2],
+      ["EDITORIAL", "Versatile by design", "Pieces that move from day to evening with ease.", "/media/sample-look-06.png", "Discover the collection", "/collections/versatile-selection", 3],
+      ["REVIEWS", "Customer notes", "What our customers are saying.", null, null, null, 4],
+      ["SERVICES", "Shopping information", "Nationwide delivery and cash on delivery across Pakistan.", null, null, null, 5],
     ] as const;
     const insertSection = connection.prepare("INSERT OR IGNORE INTO homepage_sections (type, title, body, image_path, link_label, link_url, position, visible) VALUES (?, ?, ?, ?, ?, ?, ?, 1)");
     for (const row of sectionRows) await insertSection.run(...row);
